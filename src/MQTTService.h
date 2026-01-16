@@ -32,6 +32,8 @@ class MQTTService {
     void setRainbowEnabled(bool enabled) { rainbow_enabled = enabled; }
     uint8_t getBrightness() { return brightness; }
     void setBrightness(uint8_t b) { brightness = b; }
+    bool isLightOn() { return light_on; }
+    void setLightOn(bool on) { light_on = on; }
 
   private:
 
@@ -46,6 +48,7 @@ class MQTTService {
     unsigned long last_sensor_publish;
 
     bool rainbow_enabled;
+    bool light_on;
     uint8_t brightness;
     bool last_has_light_sensor;
     bool last_has_touch_sensor;

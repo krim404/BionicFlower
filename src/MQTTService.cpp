@@ -14,6 +14,7 @@ MQTTService::MQTTService() : mqtt_client(wifi_client) {
   last_reconnect_attempt = 0;
   last_sensor_publish = 0;
   rainbow_enabled = true;
+  light_on = true;
   brightness = 255;
   last_has_light_sensor = false;
   last_has_touch_sensor = false;
@@ -220,12 +221,12 @@ void MQTTService::sendModeDiscovery() {
 void MQTTService::sendBrightnessSensorDiscovery() {
   JsonDocument doc;
 
-  doc["name"] = "Bionic Flower Brightness";
-  doc["unique_id"] = "bionic_flower_brightness";
-  doc["state_topic"] = MQTT_BASE_TOPIC "/sensor/brightness";
-  doc["device_class"] = "illuminance";
+  doc["name"] = "Bionic Flower Illuminance";
+  doc["unique_id"] = "bionic_flower_illuminance";
+  doc["state_topic"] = MQTT_BASE_TOPIC "/sensor/illuminance";
   doc["unit_of_measurement"] = "%";
   doc["value_template"] = "{{ value | round(1) }}";
+  doc["icon"] = "mdi:brightness-percent";
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["identifiers"][0] = "bionic_flower";
@@ -233,8 +234,8 @@ void MQTTService::sendBrightnessSensorDiscovery() {
   char buffer[512];
   serializeJson(doc, buffer);
 
-  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/sensor/bionic_flower/brightness/config", buffer, true);
-  Serial.println(PRINT_PREFIX + "Sent brightness sensor discovery");
+  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/sensor/bionic_flower/illuminance/config", buffer, true);
+  Serial.println(PRINT_PREFIX + "Sent illuminance sensor discovery");
 }
 
 void MQTTService::sendDistanceSensorDiscovery() {
@@ -320,8 +321,8 @@ void MQTTService::sendTemperatureDiscovery() {
 // MARK: Remove Discovery (hot-unplug)
 
 void MQTTService::removeBrightnessSensorDiscovery() {
-  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/sensor/bionic_flower/brightness/config", "", true);
-  Serial.println(PRINT_PREFIX + "Removed brightness sensor");
+  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/sensor/bionic_flower/illuminance/config", "", true);
+  Serial.println(PRINT_PREFIX + "Removed illuminance sensor");
 }
 
 void MQTTService::removeDistanceSensorDiscovery() {
@@ -347,7 +348,7 @@ void MQTTService::publishLightState() {
 
   JsonDocument doc;
 
-  doc["state"] = "ON";
+  doc["state"] = light_on ? "ON" : "OFF";
   doc["brightness"] = brightness;
   doc["color_mode"] = "rgb";
 
@@ -368,7 +369,10 @@ void MQTTService::publishCoverState() {
   HardwareService* hw = HardwareService::getSharedInstance();
   Configuration config = hw->getConfiguration();
 
-  int position = (int)(config.motor_position * 100);
+  // motor_position: 0 = closed (physically), 1 = open (physically)
+  // But the internal representation is inverted: 0 = open, 1 = closed
+  // So we invert it for MQTT: 100% = open, 0% = closed
+  int position = (int)((1.0f - config.motor_position) * 100);
 
   const char* state;
   if (position >= 99) {
@@ -376,9 +380,10 @@ void MQTTService::publishCoverState() {
   } else if (position <= 1) {
     state = "closed";
   } else {
-    state = "open";
+    state = "stopped";
   }
 
+  Serial.println(PRINT_PREFIX + "Cover position: " + String(position) + "%, state: " + state);
   mqtt_client.publish(MQTT_BASE_TOPIC "/cover/state", state, true);
   mqtt_client.publish(MQTT_BASE_TOPIC "/cover/position", String(position).c_str(), true);
 }
@@ -388,8 +393,8 @@ void MQTTService::publishSensorStates() {
   SensorData data = hw->getSensorData();
 
   if (data.has_light_sensor) {
-    float brightness_percent = data.brightness * 100;
-    mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/brightness", String(brightness_percent).c_str());
+    float illuminance_percent = data.brightness * 100;
+    mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/illuminance", String(illuminance_percent).c_str());
 
     float proximity_percent = data.distance * 100;
     mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/proximity", String(proximity_percent).c_str());
@@ -400,8 +405,8 @@ void MQTTService::publishSensorStates() {
     mqtt_client.publish(MQTT_BASE_TOPIC "/binary_sensor/touch_right", data.touch_right ? "ON" : "OFF");
   }
 
-  // ESP32 internal temperature (with calibration offset, raw value is ~25-30°C too high)
-  float temp = temperatureRead() - 27.0f;
+  // ESP32 internal temperature (with calibration offset, raw value is ~30°C too high)
+  float temp = temperatureRead() - 30.0f;
   mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/temperature", String(temp).c_str());
 }
 
@@ -480,10 +485,15 @@ void MQTTService::handleLightCommand(JsonDocument& doc) {
   if (doc["state"].is<const char*>()) {
     String state = doc["state"].as<String>();
     if (state == "OFF") {
-      config.color = { 0, 0, 0 };
-      rainbow_enabled = false;
+      light_on = false;
+      Serial.println(PRINT_PREFIX + "Light OFF");
+    } else if (state == "ON") {
+      light_on = true;
+      Serial.println(PRINT_PREFIX + "Light ON");
     }
   }
+
+  Serial.println(PRINT_PREFIX + "Light state: " + String(light_on ? "ON" : "OFF") + ", Rainbow: " + String(rainbow_enabled ? "ON" : "OFF") + ", Brightness: " + String(brightness));
 
   hw->setConfiguration(config);
   publishLightState();
@@ -510,7 +520,8 @@ void MQTTService::handleCoverPositionCommand(int position) {
   HardwareService* hw = HardwareService::getSharedInstance();
   Configuration config = hw->getConfiguration();
 
-  config.motor_position = position / 100.0f;
+  // Invert: MQTT 100% (open) -> internal 0, MQTT 0% (closed) -> internal 1
+  config.motor_position = 1.0f - (position / 100.0f);
   config.speed = 1.0f;
   hw->setConfiguration(config);
   publishCoverState();

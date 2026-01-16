@@ -173,21 +173,23 @@ void HardwareService::writeLED(Color color) {
 
 void HardwareService::loop(const boolean has_active_connection, uint32_t loop_counter) {
   if ((loop_counter % 6) == 0) {
-    Serial.println(PRINT_PREFIX + "Updating Motor Position.");
     updateMotor();
   } else {
-    Serial.println(PRINT_PREFIX + "Reading Sensor Data.");
     readSensors();
   }
 
-  // Check if MQTT rainbow effect is enabled
+  // Check MQTT light state
   MQTTService* mqtt = MQTTService::getSharedInstance();
+  bool light_on = mqtt->isLightOn();
   bool rainbow_enabled = mqtt->isRainbowEnabled();
   uint8_t mqtt_brightness = mqtt->getBrightness();
 
-  // RGB color cycle with gentle brightness pulsing (only if rainbow enabled)
+  // If light is turned off via MQTT, turn off LEDs
+  if (!light_on) {
+    writeLED({ 0, 0, 0 });
+  }
   // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
-  if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
+  else if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
     writeLED({ 0, 0, 0 });
   } else if (rainbow_enabled) {
     // Smooth hue rotation: 16-bit for fine transitions, faster cycle ~1 minute

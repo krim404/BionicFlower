@@ -56,7 +56,6 @@ void setup() {
 void loop() {
   try {
     loop_count++;
-    Serial.println(PRINT_PREFIX + "Loop " + String(loop_count));
     unsigned long start_time = millis();
     web_service->loop(loop_count);
     mqtt_service->loop();
