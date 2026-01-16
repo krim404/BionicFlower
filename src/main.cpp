@@ -5,6 +5,7 @@
 
 #include "Models.h"
 #include "WebService.h"
+#include "MQTTService.h"
 #include <exception>
 #include <esp_task_wdt.h>
 // MARK: Constants
@@ -26,6 +27,7 @@ boolean has_started = false;
 // MARK: Variables
 
 WebService* web_service;
+MQTTService* mqtt_service;
 
 // MARK: Methods
 
@@ -45,6 +47,10 @@ void setup() {
     Serial.println(PRINT_PREFIX + (success ? "Success" : "Failed"));
     has_started = true;
   });
+
+  // Initialize MQTT service
+  mqtt_service = MQTTService::getSharedInstance();
+  mqtt_service->setup();
 }
 
 void loop() {
@@ -53,6 +59,7 @@ void loop() {
     Serial.println(PRINT_PREFIX + "Loop " + String(loop_count));
     unsigned long start_time = millis();
     web_service->loop(loop_count);
+    mqtt_service->loop();
     unsigned long end_time = millis();
     if (end_time > start_time) { // millis has the possibility to overflow every 50 days.
       long delay_duration = ((long)start_time - (long)end_time) + (long)MIN_LOOP_DURATION;

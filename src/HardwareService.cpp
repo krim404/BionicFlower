@@ -2,6 +2,7 @@
 // MARK: Includes
 
 #include "HardwareService.h"
+#include "MQTTService.h"
 
 // MARK: Constants
 
@@ -71,6 +72,7 @@ HardwareService::HardwareService() {
   sensor_data.has_light_sensor = light_sensor.init() == 0;
   sensor_data.has_touch_sensor = touch_sensor.begin();
   reopen_cycle_count = 0;
+  rgb_hue = 0;
 
   motor.setupPins();
 }
@@ -176,6 +178,40 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   } else {
     Serial.println(PRINT_PREFIX + "Reading Sensor Data.");
     readSensors();
+  }
+
+  // Check if MQTT rainbow effect is enabled
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  bool rainbow_enabled = mqtt->isRainbowEnabled();
+  uint8_t mqtt_brightness = mqtt->getBrightness();
+
+  // RGB color cycle with gentle brightness pulsing (only if rainbow enabled)
+  // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
+  if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
+    writeLED({ 0, 0, 0 });
+  } else if (rainbow_enabled) {
+    // Smooth hue rotation: 16-bit for fine transitions, faster cycle ~1 minute
+    rgb_hue += 20;
+    uint8_t hue8 = rgb_hue >> 8;
+
+    // Scale base brightness by MQTT brightness setting (0-255)
+    // Gentle sine wave pulsing around the set brightness
+    uint8_t base_brightness = (mqtt_brightness * 180) / 255;
+    uint8_t pulse_range = (mqtt_brightness * 75) / 255;
+    uint8_t led_brightness = base_brightness + ((sin8(loop_counter) * pulse_range) / 255);
+
+    CHSV hsv(hue8, 255, led_brightness);
+    CRGB rgb;
+    hsv2rgb_rainbow(hsv, rgb);
+    configuration.color = { rgb.r, rgb.g, rgb.b };
+    writeLED(configuration.color);
+  } else {
+    // Static color from configuration, scaled by MQTT brightness
+    Color scaled_color;
+    scaled_color.red = (configuration.color.red * mqtt_brightness) / 255;
+    scaled_color.green = (configuration.color.green * mqtt_brightness) / 255;
+    scaled_color.blue = (configuration.color.blue * mqtt_brightness) / 255;
+    writeLED(scaled_color);
   }
 }
 

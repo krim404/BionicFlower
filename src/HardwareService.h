@@ -12,6 +12,9 @@
 #include "SparkFun_CAP1203.h"
 #include "MotorLogic.h"
 
+// Forward declaration
+class MQTTService;
+
 class HardwareService {
 
   public:
@@ -62,6 +65,7 @@ class HardwareService {
     uint32_t reopen_cycle_count;
     float intended_motor_position;
     boolean motor_calibration_finished;
+    uint16_t rgb_hue;
 
     // MARK: Methods
     

@@ -9,7 +9,7 @@
 #define DEFAULT_AMBIENT_BRIGHTNESS 0.3f
 #define DEFAULT_BRIGHTNESS_THRESHOLD_DISTANCE 0.1f
 #define DEFAULT_DISTANCE_THRESHOLD 0.6f // default ADC touch threshold
-#define DEFAULT_AUTONOMY_VALUE 0
+#define DEFAULT_AUTONOMY_VALUE 1
 #define MOTOR_SPEED_SLOW 0.002f
 #define MOTOR_SPEED_FAST 0.001f
 
@@ -26,5 +26,17 @@
 
 #define MOTOR_POSITION_OPEN 1.0f
 #define MOTOR_POSITION_CLOSED 0.0f
+
+// MQTT Configuration
+#define MQTT_BROKER "192.168.x.x"
+#define MQTT_PORT 1883
+#define MQTT_USER "mqtt"
+#define MQTT_PASSWORD "REMOVED"
+#define MQTT_CLIENT_ID "bionic_flower"
+#define MQTT_DISCOVERY_PREFIX "homeassistant"
+#define MQTT_BASE_TOPIC "bionic_flower"
+
+// Enable/disable distance sensor feature
+#define ENABLE_DISTANCE false
 
 #endif

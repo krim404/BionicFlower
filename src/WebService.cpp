@@ -2,6 +2,7 @@
 // MARK: Includes
 
 #include "WebService.h"
+#include "MQTTService.h"
 
 // MARK: Constants
 
@@ -194,6 +195,20 @@ void WebService::handleUpdateFromWeb(AsyncWebServerRequest *request) {
   }
 
   hardware_service->setConfiguration(configuration);
+
+  // Sync with MQTT
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+
+  // If color was changed via web, disable rainbow effect
+  if (request->hasArg(KEY_COLOR.c_str())) {
+    mqtt->setRainbowEnabled(false);
+    mqtt->publishLightState();
+  }
+
+  // If mode was changed via web, sync with MQTT
+  if (request->hasArg(KEY_IS_AUTONOMOUS.c_str())) {
+    mqtt->publishModeState();
+  }
 
   handleUpdateWeb(request);
 }

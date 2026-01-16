@@ -5,12 +5,9 @@
 
 // MARK: Constants
 
-const char* WIFI_PASSWORD = "education";
+const char* WIFI_SSID = "REMOVED";
+const char* WIFI_PASSWORD = "REMOVED";
 const String PRINT_PREFIX = "[WiFi]: ";
-const IPAddress SUBNETMASK = IPAddress(255, 255, 255, 0);
-const int CHANNEL = 6;
-const boolean IS_HIDDEN = false;
-const int MAX_CONNECTIONS = 4;
 
 // MARK: Initialization
 
@@ -27,10 +24,9 @@ void WiFiService::start(IPAddress ip, std::function<void(bool)> completion) {
   this->start_completion = completion;
 
   WiFi.disconnect();
-  WiFi.softAPdisconnect(false);
-  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
   WiFi.onEvent(std::bind(&WiFiService::onEvent, this, std::placeholders::_1));
-  WiFi.begin();
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 }
 
 int WiFiService::getActiveConnectionCount() {
@@ -47,26 +43,10 @@ void WiFiService::startCompleted(boolean success) {
 }
 
 void WiFiService::onEvent(WiFiEvent_t event) {
-  String ssid = "b4e_" + getMacAddress();
-
   switch (event) {
     case SYSTEM_EVENT_WIFI_READY:
       Serial.println(PRINT_PREFIX + "Event: Wifi ready!");
-
-      Serial.println(PRINT_PREFIX + "Starting softAP.");
-      if (!WiFi.softAP(ssid.c_str(), WIFI_PASSWORD, 6, false, MAX_CONNECTIONS)) {
-        Serial.println(PRINT_PREFIX + "AP setup failed.");
-        startCompleted(false);
-        return;
-      }
-
-      Serial.println(PRINT_PREFIX + "Starting softAP config.");
-      if (!WiFi.softAPConfig(ip_address, ip_address, SUBNETMASK)) {
-        Serial.println(PRINT_PREFIX + "AP configuration failed.");
-        startCompleted(false);
-        return;
-      }
-
+      Serial.println(PRINT_PREFIX + "Connecting to " + String(WIFI_SSID) + "...");
       break;
     case SYSTEM_EVENT_SCAN_DONE:
       Serial.println(PRINT_PREFIX + "Event: Scan done!");
@@ -81,13 +61,15 @@ void WiFiService::onEvent(WiFiEvent_t event) {
       Serial.println(PRINT_PREFIX + "Event: Station connected!");
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
-      Serial.println(PRINT_PREFIX + "Event: Station disconnected!");
+      Serial.println(PRINT_PREFIX + "Disconnected! Reconnecting...");
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       break;
     case SYSTEM_EVENT_STA_AUTHMODE_CHANGE:
       Serial.println(PRINT_PREFIX + "Event: Station auth mode changed!");
       break;
     case SYSTEM_EVENT_STA_GOT_IP:
-      Serial.println(PRINT_PREFIX + "Event: Station got IP!");
+      Serial.println(PRINT_PREFIX + "Connected! IP: " + WiFi.localIP().toString());
+      startCompleted(true);
       break;
     case SYSTEM_EVENT_STA_LOST_IP:
       Serial.println(PRINT_PREFIX + "Event: Station lost IP!");
@@ -106,25 +88,9 @@ void WiFiService::onEvent(WiFiEvent_t event) {
       break;
     case SYSTEM_EVENT_AP_START:
       Serial.println(PRINT_PREFIX + "Event: AP started!");
-      Serial.println(PRINT_PREFIX + "MAC-Address: " + getMacAddress());
-      Serial.println(PRINT_PREFIX + "HotSpot IP: " + ip_address.toString());
-      Serial.println(PRINT_PREFIX + "SSID: " + ssid);
-      startCompleted(true);
       break;
     case SYSTEM_EVENT_AP_STOP:
       Serial.println(PRINT_PREFIX + "Event: AP stopped!");
-      break;
-    case SYSTEM_EVENT_AP_STACONNECTED:
-      Serial.println(PRINT_PREFIX + "Event: AP - Station connected!");
-      break;
-    case SYSTEM_EVENT_AP_STADISCONNECTED:
-      Serial.println(PRINT_PREFIX + "Event: AP - Station disconnected!");
-      break;
-    case SYSTEM_EVENT_AP_STAIPASSIGNED:
-      Serial.println(PRINT_PREFIX + "Event: AP - Station IP assigned!");
-      break;
-    case SYSTEM_EVENT_AP_PROBEREQRECVED:
-      Serial.println(PRINT_PREFIX + "Event: AP - Probe request received!");
       break;
     case SYSTEM_EVENT_GOT_IP6:
       Serial.println(PRINT_PREFIX + "Event: IPv6 preferred!");
