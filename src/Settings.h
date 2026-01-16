@@ -21,7 +21,7 @@
 
 #define PIN_IR_LED 4
 
-#define DEBUG_AUTONOMOUS_MODE true
+#define DEBUG_AUTONOMOUS_MODE false
 #define DEBUG_MANUAL_MODE true
 
 #define MOTOR_POSITION_OPEN 1.0f
