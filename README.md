@@ -1,45 +1,47 @@
 # Bionic Flower
 
-ESP32-basierte interaktive Blume mit LEDs, Schrittmotor und Sensoren. Vollständige Home Assistant Integration via MQTT.
+ESP32-based interactive flower with LEDs, stepper motor and sensors. Full Home Assistant integration via MQTT.
+
+> **Note:** The original code is from [Festo Bionics4Education](https://github.com/Festo-se/Bionics4Education). This repository contains modifications for Home Assistant MQTT integration, WiFi station mode, and additional LED effects.
 
 ## Features
 
 ### MQTT Home Assistant Integration
 
-Die Blume wird automatisch in Home Assistant erkannt (MQTT Auto-Discovery).
+The flower is automatically discovered in Home Assistant (MQTT Auto-Discovery).
 
-**Entitäten:**
-- `light.bionic_flower` - LED-Steuerung mit Helligkeit, Farbe und Effekten
-- `cover.bionic_flower` - Motor-Steuerung (öffnen/schließen)
-- `select.bionic_flower_mode` - Modus-Auswahl (Automatic/Manual)
-- `sensor.bionic_flower_illuminance` - Lichtsensor (%)
-- `sensor.bionic_flower_proximity` - Distanzsensor (%)
-- `sensor.bionic_flower_temperature` - Temperatursensor (°C)
-- `binary_sensor.bionic_flower_touch_left` - Touch links
-- `binary_sensor.bionic_flower_touch_right` - Touch rechts
+**Entities:**
+- `light.bionic_flower` - LED control with brightness, color and effects
+- `cover.bionic_flower` - Motor control (open/close)
+- `select.bionic_flower_mode` - Mode selection (Automatic/Manual)
+- `sensor.bionic_flower_illuminance` - Light sensor (%)
+- `sensor.bionic_flower_proximity` - Distance sensor (%)
+- `sensor.bionic_flower_temperature` - Temperature sensor (°C)
+- `binary_sensor.bionic_flower_touch_left` - Touch left
+- `binary_sensor.bionic_flower_touch_right` - Touch right
 
-### LED-Effekte
+### LED Effects
 
-| Effekt | Beschreibung |
-|--------|--------------|
-| **None** | Statische Farbe (RGB wählbar) |
-| **Rainbow** | Regenbogen-Animation (alle LEDs gleiche Farbe) |
-| **Rainbow Multi** | Regenbogen mit individuellen LED-Farben |
-| **Circadian** | Tageslicht-Simulation basierend auf Uhrzeit |
-| **Weather** | Wetter-Visualisierung mit Motor-Steuerung |
+| Effect | Description |
+|--------|-------------|
+| **None** | Static color (RGB selectable) |
+| **Rainbow** | Rainbow animation (all LEDs same color) |
+| **Rainbow Multi** | Rainbow with individual LED colors |
+| **Circadian** | Daylight simulation based on time of day |
+| **Weather** | Weather visualization with motor control |
 
-### Circadian-Modus
+### Circadian Mode
 
-Passt Farbtemperatur automatisch an die Tageszeit an:
+Automatically adjusts color temperature to the time of day:
 
-| Uhrzeit | Farbstimmung |
-|---------|--------------|
-| 06:00 - 09:00 | Warmes Orange (Sonnenaufgang) |
-| 09:00 - 12:00 | Warmes Weiß |
-| 12:00 - 17:00 | Kühles Tageslicht |
-| 17:00 - 20:00 | Goldene Stunde |
-| 20:00 - 22:00 | Warmes Amber |
-| 22:00 - 06:00 | Gedimmtes Rot (Nacht) |
+| Time | Color Mood |
+|------|------------|
+| 06:00 - 09:00 | Warm orange (sunrise) |
+| 09:00 - 12:00 | Warm white |
+| 12:00 - 17:00 | Cool daylight |
+| 17:00 - 20:00 | Golden hour |
+| 20:00 - 22:00 | Warm amber |
+| 22:00 - 06:00 | Dimmed red (night) |
 
 **Home Assistant Automation:**
 ```yaml
@@ -55,26 +57,26 @@ automation:
           payload: "{{ now().hour }}"
 ```
 
-### Weather-Modus
+### Weather Mode
 
-Visualisiert Home Assistant Wetter-Daten mit einzigartigen LED-Animationen und Motor-Positionen:
+Visualizes Home Assistant weather data with unique LED animations and motor positions:
 
-| Wetter | LEDs | Motor |
-|--------|------|-------|
-| `sunny` | Warmes Gelb, pulsierend | 100% offen |
-| `clear-night` | Dunkelblau mit funkelnden Sternen | 100% offen |
-| `partlycloudy` | Gelb/Grau abwechselnd | 75% offen |
-| `cloudy` | Graue Wolken wandern | 50% offen |
-| `fog` | Blasses Weiß, langsames Atmen | 50% offen |
-| `windy` | Cyan, schnelles Hin-und-Her | 50% offen |
-| `rainy` | Blaue Regentropfen fallen | Geschlossen |
-| `pouring` | Schnelle, intensive Regentropfen | Geschlossen |
-| `lightning` | Grau mit weißen Blitzen | Geschlossen |
-| `lightning-rainy` | Regen + Blitze kombiniert | Geschlossen |
-| `snowy` | Weißes Glitzern | Geschlossen |
-| `snowy-rainy` | Weiß/Blau Tropfen | Geschlossen |
-| `hail` | Weißes Flackern | Geschlossen |
-| `exceptional` | Rainbow Multi Effekt | 100% offen |
+| Weather | LEDs | Motor |
+|---------|------|-------|
+| `sunny` | Warm yellow, pulsing | 100% open |
+| `clear-night` | Dark blue with twinkling stars | 100% open |
+| `partlycloudy` | Yellow/gray alternating | 75% open |
+| `cloudy` | Gray clouds drifting | 50% open |
+| `fog` | Pale white, slow breathing | 50% open |
+| `windy` | Cyan, fast back-and-forth | 50% open |
+| `rainy` | Blue raindrops falling | Closed |
+| `pouring` | Fast, intense raindrops | Closed |
+| `lightning` | Gray with white flashes | Closed |
+| `lightning-rainy` | Rain + lightning combined | Closed |
+| `snowy` | White glittering | Closed |
+| `snowy-rainy` | White/blue drops | Closed |
+| `hail` | White flickering | Closed |
+| `exceptional` | Rainbow Multi effect | 100% open |
 
 **Home Assistant Automation:**
 ```yaml
@@ -94,43 +96,43 @@ automation:
           payload: "{{ state_attr('weather.home', 'temperature') }}"
 ```
 
-### Touch-Steuerung (Manual-Modus)
+### Touch Control (Manual Mode)
 
-Im Manual-Modus können die Touch-Sensoren zur lokalen Steuerung verwendet werden:
+In Manual mode, the touch sensors can be used for local control:
 
-| Aktion | Funktion |
+| Action | Function |
 |--------|----------|
-| **Links kurz** | Vorheriger Effekt |
-| **Links lang** (>500ms) | Helligkeit verringern |
-| **Rechts kurz** | Nächster Effekt |
-| **Rechts lang** (>500ms) | Helligkeit erhöhen |
-| **Beide gleichzeitig** | LEDs ein/ausschalten |
+| **Left short** | Previous effect |
+| **Left long** (>500ms) | Decrease brightness |
+| **Right short** | Next effect |
+| **Right long** (>500ms) | Increase brightness |
+| **Both simultaneously** | Toggle LEDs on/off |
 
-Effekt-Reihenfolge: None → Rainbow → Rainbow Multi → Circadian → Weather → None ...
+Effect order: None → Rainbow → Rainbow Multi → Circadian → Weather → None ...
 
-## Erste Einrichtung
+## Setup
 
-1. **Credentials-Datei erstellen:**
+1. **Create credentials file:**
    ```bash
    cp src/Credentials.h.example src/Credentials.h
    ```
 
-2. **Eigene Werte eintragen** in `src/Credentials.h`:
+2. **Enter your values** in `src/Credentials.h`:
    ```cpp
-   // WiFi - Dein WLAN
-   #define WIFI_SSID "dein_wlan_name"
-   #define WIFI_PASSWORD "dein_wlan_passwort"
+   // WiFi - Your network
+   #define WIFI_SSID "your_wifi_name"
+   #define WIFI_PASSWORD "your_wifi_password"
 
-   // MQTT - Dein Home Assistant Broker
+   // MQTT - Your Home Assistant broker
    #define MQTT_BROKER "192.168.x.x"
    #define MQTT_PORT 1883
    #define MQTT_USER "mqtt"
-   #define MQTT_PASSWORD "dein_mqtt_passwort"
+   #define MQTT_PASSWORD "your_mqtt_password"
    ```
 
-3. **Home Assistant MQTT-Broker** muss installiert und konfiguriert sein
-   - Mosquitto Add-on oder externer MQTT-Broker
-   - MQTT-Integration in Home Assistant aktivieren
+3. **Home Assistant MQTT broker** must be installed and configured
+   - Mosquitto add-on or external MQTT broker
+   - MQTT integration enabled in Home Assistant
 
 ## Build
 
@@ -148,29 +150,33 @@ pio device monitor
 ## Hardware
 
 - **ESP32** DevKit
-- **5x WS2812B** RGB-LEDs (GPIO 16)
-- **Schrittmotor** mit A4988 Treiber
-- **RPR-0521RS** Licht-/Proximity-Sensor (I2C)
-- **CAP1203** Touch-Sensor (I2C, Adresse 0x28)
+- **5x WS2812B** RGB LEDs (GPIO 16)
+- **Stepper motor** with A4988 driver
+- **RPR-0521RS** Light/proximity sensor (I2C)
+- **CAP1203** Touch sensor (I2C, address 0x28)
 
 ## MQTT Topics
 
-### Subscriptions (eingehend)
-- `bionic_flower/light/set` - LED-Befehle (JSON)
+### Subscriptions (incoming)
+- `bionic_flower/light/set` - LED commands (JSON)
 - `bionic_flower/cover/set` - OPEN/CLOSE/STOP
 - `bionic_flower/cover/set_position` - 0-100%
 - `bionic_flower/select/mode/set` - Automatic/Manual
-- `bionic_flower/circadian/hour` - Stunde (0-23)
-- `bionic_flower/weather/state` - Wetter-Zustand
-- `bionic_flower/weather/temperature` - Temperatur (°C)
+- `bionic_flower/circadian/hour` - Hour (0-23)
+- `bionic_flower/weather/state` - Weather state
+- `bionic_flower/weather/temperature` - Temperature (°C)
 
-### Publications (ausgehend)
-- `bionic_flower/light/state` - LED-Status (JSON)
+### Publications (outgoing)
+- `bionic_flower/light/state` - LED status (JSON)
 - `bionic_flower/cover/state` - open/closed/stopped
 - `bionic_flower/cover/position` - 0-100%
 - `bionic_flower/select/mode/state` - Automatic/Manual
-- `bionic_flower/sensor/illuminance` - Helligkeit (%)
-- `bionic_flower/sensor/proximity` - Distanz (%)
-- `bionic_flower/sensor/temperature` - Temperatur (°C)
+- `bionic_flower/sensor/illuminance` - Brightness (%)
+- `bionic_flower/sensor/proximity` - Distance (%)
+- `bionic_flower/sensor/temperature` - Temperature (°C)
 - `bionic_flower/binary_sensor/touch_left` - ON/OFF
 - `bionic_flower/binary_sensor/touch_right` - ON/OFF
+
+## Credits
+
+Original code by [Festo Bionics4Education](https://github.com/Festo-se/Bionics4Education)
