@@ -307,18 +307,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     mqtt_brightness = mqtt->getBrightness();
   }
 
-  // If light is turned off via MQTT, turn off LEDs
-  if (!light_on) {
-    writeLED({ 0, 0, 0 });
-  }
-  // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
-  else if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
-    writeLED({ 0, 0, 0 });
-  } else if (weather_enabled) {
-    // Weather mode: Individual animations for each weather state
+  // Weather motor control - runs independently of LED state
+  if (weather_enabled) {
     String weather_state = mqtt->getWeatherState();
-
-    // Determine target motor position based on weather
     float target_position = MOTOR_POSITION_OPEN; // Default: open (sunny)
 
     if (weather_state == "rainy" || weather_state == "pouring" ||
@@ -326,7 +317,7 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
         weather_state == "hail" || weather_state == "snowy" || weather_state == "snowy-rainy") {
       target_position = MOTOR_POSITION_CLOSED;
     } else if (weather_state == "partlycloudy") {
-      target_position = 0.25f; // 75% open
+      target_position = 0.75f; // 75% open
     } else if (weather_state == "cloudy" || weather_state == "fog" ||
                weather_state == "windy" || weather_state == "windy-variant") {
       target_position = 0.5f;
@@ -337,6 +328,18 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       move(target_position, MOTOR_SPEED_FAST);
       configuration.motor_position = target_position;
     }
+  }
+
+  // If light is turned off via MQTT, turn off LEDs
+  if (!light_on) {
+    writeLED({ 0, 0, 0 });
+  }
+  // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
+  else if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
+    writeLED({ 0, 0, 0 });
+  } else if (weather_enabled) {
+    // Weather mode: Individual animations for each weather state
+    String weather_state = mqtt->getWeatherState();
 
     // Individual weather animations
     if (weather_state == "sunny") {
@@ -673,6 +676,11 @@ void HardwareService::readSensors() {
 void HardwareService::updateMotor() {
   if (!motor_calibration_finished) return;
   if (!configuration.is_autonomous) return;
+
+  // Don't run autonomous motor control if any effect is active
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  if (mqtt->isWeatherEnabled() || mqtt->isCircadianEnabled() ||
+      mqtt->isRainbowEnabled() || mqtt->isRainbowMultiEnabled()) return;
 
   configuration.motor_position = 1 - ((float)(motor.getMotorPosition()) / (float)(32 * MOTOR_FULL_STEP_COUNT));
   Serial.println(PRINT_PREFIX + "Updating motor..." + String(light_measurement_count));

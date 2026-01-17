@@ -108,16 +108,29 @@ Im Manual-Modus können die Touch-Sensoren zur lokalen Steuerung verwendet werde
 
 Effekt-Reihenfolge: None → Rainbow → Rainbow Multi → Circadian → Weather → None ...
 
-## Konfiguration
+## Erste Einrichtung
 
-Die MQTT-Einstellungen befinden sich in `src/Settings.h`:
+1. **Credentials-Datei erstellen:**
+   ```bash
+   cp src/Credentials.h.example src/Credentials.h
+   ```
 
-```cpp
-#define MQTT_BROKER "192.168.x.x"
-#define MQTT_PORT 1883
-#define MQTT_USER "mqtt"
-#define MQTT_PASSWORD "your_password"
-```
+2. **Eigene Werte eintragen** in `src/Credentials.h`:
+   ```cpp
+   // WiFi - Dein WLAN
+   #define WIFI_SSID "dein_wlan_name"
+   #define WIFI_PASSWORD "dein_wlan_passwort"
+
+   // MQTT - Dein Home Assistant Broker
+   #define MQTT_BROKER "192.168.x.x"
+   #define MQTT_PORT 1883
+   #define MQTT_USER "mqtt"
+   #define MQTT_PASSWORD "dein_mqtt_passwort"
+   ```
+
+3. **Home Assistant MQTT-Broker** muss installiert und konfiguriert sein
+   - Mosquitto Add-on oder externer MQTT-Broker
+   - MQTT-Integration in Home Assistant aktivieren
 
 ## Build
 

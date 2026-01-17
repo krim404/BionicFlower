@@ -2,6 +2,8 @@
 #ifndef SETTINGS_H_
 #define SETTINGS_H_
 
+#include "Credentials.h"
+
 #define MOTOR_FULL_STEP_COUNT 14000 // number of motor steps for full up/down
 #define MOTOR_CURRENT_LOW 250
 #define DEFAULT_LOWER_BRIGHTNESS_THRESHOLD 0.2f // default brightness threshold
@@ -27,11 +29,7 @@
 #define MOTOR_POSITION_OPEN 1.0f
 #define MOTOR_POSITION_CLOSED 0.0f
 
-// MQTT Configuration
-#define MQTT_BROKER "192.168.x.x"
-#define MQTT_PORT 1883
-#define MQTT_USER "mqtt"
-#define MQTT_PASSWORD "REMOVED"
+// MQTT Configuration (credentials in Credentials.h)
 #define MQTT_CLIENT_ID "bionic_flower"
 #define MQTT_DISCOVERY_PREFIX "homeassistant"
 #define MQTT_BASE_TOPIC "bionic_flower"

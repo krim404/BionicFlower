@@ -2,11 +2,10 @@
 // MARK: Includes
 
 #include "WiFiService.h"
+#include "Credentials.h"
 
 // MARK: Constants
 
-const char* WIFI_SSID = "REMOVED";
-const char* WIFI_PASSWORD = "REMOVED";
 const String PRINT_PREFIX = "[WiFi]: ";
 
 // MARK: Initialization
