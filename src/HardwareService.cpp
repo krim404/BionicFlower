@@ -74,6 +74,14 @@ HardwareService::HardwareService() {
   reopen_cycle_count = 0;
   rgb_hue = 0;
 
+  // Touch handling init
+  touch_left_start = 0;
+  touch_right_start = 0;
+  touch_left_was_pressed = false;
+  touch_right_was_pressed = false;
+  touch_left_long_triggered = false;
+  touch_right_long_triggered = false;
+
   motor.setupPins();
 }
 
@@ -187,6 +195,118 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   bool weather_enabled = mqtt->isWeatherEnabled();
   uint8_t mqtt_brightness = mqtt->getBrightness();
 
+  // Touch handling in manual mode
+  if (!configuration.is_autonomous && sensor_data.has_touch_sensor) {
+    const unsigned long LONG_PRESS_DURATION = 500; // 500ms for long press
+    const uint8_t BRIGHTNESS_STEP = 25;
+    unsigned long now = millis();
+
+    // Both touches: toggle light on/off
+    if (sensor_data.touch_left && sensor_data.touch_right) {
+      if (!touch_left_was_pressed && !touch_right_was_pressed) {
+        // First frame of both pressed - toggle light
+        mqtt->setLightOn(!light_on);
+        mqtt->publishLightState();
+        light_on = mqtt->isLightOn();
+      }
+      touch_left_was_pressed = true;
+      touch_right_was_pressed = true;
+      touch_left_long_triggered = true;  // Prevent single-touch actions
+      touch_right_long_triggered = true;
+    }
+    // Left touch handling (only if right not pressed)
+    else if (sensor_data.touch_left && !sensor_data.touch_right) {
+      if (!touch_left_was_pressed) {
+        touch_left_start = now;
+        touch_left_was_pressed = true;
+        touch_left_long_triggered = false;
+      } else if (!touch_left_long_triggered && (now - touch_left_start >= LONG_PRESS_DURATION)) {
+        // Long press: decrease brightness
+        touch_left_long_triggered = true;
+        if (mqtt_brightness > BRIGHTNESS_STEP) {
+          mqtt->setBrightness(mqtt_brightness - BRIGHTNESS_STEP);
+        } else {
+          mqtt->setBrightness(1); // Minimum brightness
+        }
+        mqtt->publishLightState();
+      }
+    }
+    // Right touch handling (only if left not pressed)
+    else if (sensor_data.touch_right && !sensor_data.touch_left) {
+      if (!touch_right_was_pressed) {
+        touch_right_start = now;
+        touch_right_was_pressed = true;
+        touch_right_long_triggered = false;
+      } else if (!touch_right_long_triggered && (now - touch_right_start >= LONG_PRESS_DURATION)) {
+        // Long press: increase brightness
+        touch_right_long_triggered = true;
+        if (mqtt_brightness < 255 - BRIGHTNESS_STEP) {
+          mqtt->setBrightness(mqtt_brightness + BRIGHTNESS_STEP);
+        } else {
+          mqtt->setBrightness(255); // Maximum brightness
+        }
+        mqtt->publishLightState();
+      }
+    }
+    // No touch - handle releases
+    else {
+      // Left touch released
+      if (touch_left_was_pressed && !touch_left_long_triggered) {
+        // Short press released: previous effect
+        if (weather_enabled) {
+          mqtt->setWeatherEnabled(false);
+          mqtt->setCircadianEnabled(true);
+        } else if (circadian_enabled) {
+          mqtt->setCircadianEnabled(false);
+          mqtt->setRainbowMultiEnabled(true);
+        } else if (rainbow_multi_enabled) {
+          mqtt->setRainbowMultiEnabled(false);
+          mqtt->setRainbowEnabled(true);
+        } else if (rainbow_enabled) {
+          mqtt->setRainbowEnabled(false);
+          // None - static color
+        } else {
+          // None -> Weather (cycle)
+          mqtt->setWeatherEnabled(true);
+        }
+        mqtt->publishLightState();
+      }
+      touch_left_was_pressed = false;
+      touch_left_long_triggered = false;
+
+      // Right touch released
+      if (touch_right_was_pressed && !touch_right_long_triggered) {
+        // Short press released: next effect
+        if (rainbow_enabled) {
+          mqtt->setRainbowEnabled(false);
+          mqtt->setRainbowMultiEnabled(true);
+        } else if (rainbow_multi_enabled) {
+          mqtt->setRainbowMultiEnabled(false);
+          mqtt->setCircadianEnabled(true);
+        } else if (circadian_enabled) {
+          mqtt->setCircadianEnabled(false);
+          mqtt->setWeatherEnabled(true);
+        } else if (weather_enabled) {
+          mqtt->setWeatherEnabled(false);
+          // None - static color
+        } else {
+          // None -> Rainbow (cycle)
+          mqtt->setRainbowEnabled(true);
+        }
+        mqtt->publishLightState();
+      }
+      touch_right_was_pressed = false;
+      touch_right_long_triggered = false;
+    }
+
+    // Re-read effect states after potential changes
+    rainbow_enabled = mqtt->isRainbowEnabled();
+    rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
+    circadian_enabled = mqtt->isCircadianEnabled();
+    weather_enabled = mqtt->isWeatherEnabled();
+    mqtt_brightness = mqtt->getBrightness();
+  }
+
   // If light is turned off via MQTT, turn off LEDs
   if (!light_on) {
     writeLED({ 0, 0, 0 });
@@ -214,6 +334,7 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     // Move motor to target position if different
     if (abs(configuration.motor_position - target_position) > 0.01f) {
+      move(target_position, MOTOR_SPEED_FAST);
       configuration.motor_position = target_position;
     }
 

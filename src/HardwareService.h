@@ -67,6 +67,14 @@ class HardwareService {
     boolean motor_calibration_finished;
     uint16_t rgb_hue;
 
+    // Touch handling for manual mode
+    unsigned long touch_left_start;
+    unsigned long touch_right_start;
+    bool touch_left_was_pressed;
+    bool touch_right_was_pressed;
+    bool touch_left_long_triggered;
+    bool touch_right_long_triggered;
+
     // MARK: Methods
     
     void move(float position, float speed);

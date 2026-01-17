@@ -391,10 +391,10 @@ void MQTTService::publishCoverState() {
   HardwareService* hw = HardwareService::getSharedInstance();
   Configuration config = hw->getConfiguration();
 
-  // motor_position: 0 = closed (physically), 1 = open (physically)
-  // But the internal representation is inverted: 0 = open, 1 = closed
-  // So we invert it for MQTT: 100% = open, 0% = closed
-  int position = (int)((1.0f - config.motor_position) * 100);
+  // motor_position: 0 = open (physically), 1 = closed (physically)
+  // For Home Assistant: 100% = open, 0% = closed
+  // Direct mapping without inversion
+  int position = (int)(config.motor_position * 100);
 
   const char* state;
   if (position >= 99) {
@@ -565,8 +565,8 @@ void MQTTService::handleCoverPositionCommand(int position) {
   HardwareService* hw = HardwareService::getSharedInstance();
   Configuration config = hw->getConfiguration();
 
-  // Invert: MQTT 100% (open) -> internal 0, MQTT 0% (closed) -> internal 1
-  config.motor_position = 1.0f - (position / 100.0f);
+  // Direct mapping: MQTT 100% (open) -> internal 1.0, MQTT 0% (closed) -> internal 0
+  config.motor_position = position / 100.0f;
   config.speed = 1.0f;
   hw->setConfiguration(config);
   publishCoverState();
