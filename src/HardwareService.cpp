@@ -182,6 +182,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   MQTTService* mqtt = MQTTService::getSharedInstance();
   bool light_on = mqtt->isLightOn();
   bool rainbow_enabled = mqtt->isRainbowEnabled();
+  bool rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
+  bool circadian_enabled = mqtt->isCircadianEnabled();
+  bool weather_enabled = mqtt->isWeatherEnabled();
   uint8_t mqtt_brightness = mqtt->getBrightness();
 
   // If light is turned off via MQTT, turn off LEDs
@@ -191,8 +194,259 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
   else if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
     writeLED({ 0, 0, 0 });
+  } else if (weather_enabled) {
+    // Weather mode: Individual animations for each weather state
+    String weather_state = mqtt->getWeatherState();
+
+    // Determine target motor position based on weather
+    float target_position = MOTOR_POSITION_OPEN; // Default: open (sunny)
+
+    if (weather_state == "rainy" || weather_state == "pouring" ||
+        weather_state == "lightning" || weather_state == "lightning-rainy" ||
+        weather_state == "hail" || weather_state == "snowy" || weather_state == "snowy-rainy") {
+      target_position = MOTOR_POSITION_CLOSED;
+    } else if (weather_state == "partlycloudy") {
+      target_position = 0.25f; // 75% open
+    } else if (weather_state == "cloudy" || weather_state == "fog" ||
+               weather_state == "windy" || weather_state == "windy-variant") {
+      target_position = 0.5f;
+    }
+
+    // Move motor to target position if different
+    if (abs(configuration.motor_position - target_position) > 0.01f) {
+      configuration.motor_position = target_position;
+    }
+
+    // Individual weather animations
+    if (weather_state == "sunny") {
+      // Warm yellow/gold with gentle breathing
+      uint8_t breath = sin8(loop_counter) / 4 + 180;
+      uint8_t r = (255 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t g = (220 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t b = (100 * mqtt_brightness * breath) / (255 * 255);
+      writeLED({ r, g, b });
+
+    } else if (weather_state == "clear-night") {
+      // Dark blue base with twinkling stars
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t twinkle = ((loop_counter + i * 50) % 100 < 10) ? 255 : 0;
+        if (random(100) < 3) twinkle = 255; // Random sparkle
+        uint8_t r = (twinkle * mqtt_brightness) / 255;
+        uint8_t g = (twinkle * mqtt_brightness) / 255;
+        uint8_t b = ((40 + twinkle / 3) * mqtt_brightness) / 255;
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "cloudy") {
+      // Gray colors slowly drifting across LEDs
+      uint8_t wave_pos = (loop_counter / 3) % (LED_COUNT * 2);
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t dist = abs((int)wave_pos - i - LED_COUNT);
+        uint8_t brightness_mod = 255 - (dist * 30);
+        if (brightness_mod > 255) brightness_mod = 100;
+        uint8_t gray = (brightness_mod * mqtt_brightness) / 255;
+        leds[i] = CRGB(gray, gray, (gray * 110) / 100);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "partlycloudy") {
+      // Alternating sunny yellow and cloud gray
+      for (int i = 0; i < LED_COUNT; i++) {
+        if (i % 2 == 0) {
+          // Sunny
+          uint8_t r = (255 * mqtt_brightness) / 255;
+          uint8_t g = (200 * mqtt_brightness) / 255;
+          uint8_t b = (80 * mqtt_brightness) / 255;
+          leds[i] = CRGB(r, g, b);
+        } else {
+          // Cloudy gray
+          uint8_t gray = (150 * mqtt_brightness) / 255;
+          leds[i] = CRGB(gray, gray, gray);
+        }
+      }
+      FastLED.show();
+
+    } else if (weather_state == "fog") {
+      // Pale white/gray with very slow breathing
+      uint8_t breath = sin8(loop_counter / 4) / 3 + 150;
+      uint8_t val = (breath * mqtt_brightness) / 255;
+      writeLED({ val, val, (val * 95) / 100 });
+
+    } else if (weather_state == "rainy") {
+      // Blue raindrops falling down (sequential LED lighting)
+      uint8_t drop_pos = (loop_counter / 4) % LED_COUNT;
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t intensity = (i == drop_pos) ? 255 : 50;
+        uint8_t r = (30 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (80 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "pouring") {
+      // Intense blue, fast raindrops
+      uint8_t drop_pos = (loop_counter / 2) % LED_COUNT;
+      uint8_t drop_pos2 = (loop_counter / 2 + 2) % LED_COUNT;
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t intensity = (i == drop_pos || i == drop_pos2) ? 255 : 80;
+        uint8_t r = (20 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (60 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (255 * mqtt_brightness * intensity) / (255 * 255);
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "lightning") {
+      // Dark gray base with random white flashes
+      bool flash = (random(100) < 5);
+      if (flash) {
+        uint8_t val = (255 * mqtt_brightness) / 255;
+        writeLED({ val, val, val });
+      } else {
+        uint8_t gray = (40 * mqtt_brightness) / 255;
+        writeLED({ gray, gray, (gray * 120) / 100 });
+      }
+
+    } else if (weather_state == "lightning-rainy") {
+      // Rain animation with occasional lightning flashes
+      bool flash = (random(100) < 3);
+      if (flash) {
+        uint8_t val = (255 * mqtt_brightness) / 255;
+        writeLED({ val, val, val });
+      } else {
+        uint8_t drop_pos = (loop_counter / 3) % LED_COUNT;
+        for (int i = 0; i < LED_COUNT; i++) {
+          uint8_t intensity = (i == drop_pos) ? 255 : 60;
+          uint8_t r = (25 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t g = (70 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t b = (220 * mqtt_brightness * intensity) / (255 * 255);
+          leds[i] = CRGB(r, g, b);
+        }
+        FastLED.show();
+      }
+
+    } else if (weather_state == "windy" || weather_state == "windy-variant") {
+      // Cyan/turquoise quickly sweeping back and forth
+      uint8_t pos = (sin8(loop_counter * 2) * (LED_COUNT - 1)) / 255;
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t dist = abs((int)pos - i);
+        uint8_t intensity = 255 - (dist * 60);
+        if (intensity > 255) intensity = 50;
+        uint8_t r = (50 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (200 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (180 * mqtt_brightness * intensity) / (255 * 255);
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "snowy") {
+      // White with random sparkles
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t sparkle = (random(100) < 10) ? 255 : 180;
+        uint8_t val = (sparkle * mqtt_brightness) / 255;
+        leds[i] = CRGB(val, val, val);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "snowy-rainy") {
+      // Alternating white and blue drops
+      uint8_t drop_pos = (loop_counter / 3) % LED_COUNT;
+      for (int i = 0; i < LED_COUNT; i++) {
+        bool is_snow = ((loop_counter / 10) + i) % 2 == 0;
+        uint8_t intensity = (i == drop_pos) ? 255 : 80;
+        if (is_snow) {
+          uint8_t val = (intensity * mqtt_brightness) / 255;
+          leds[i] = CRGB(val, val, val);
+        } else {
+          uint8_t r = (30 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t g = (80 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);
+          leds[i] = CRGB(r, g, b);
+        }
+      }
+      FastLED.show();
+
+    } else if (weather_state == "hail") {
+      // White with harsh random flicker
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t flicker = (random(100) < 30) ? 255 : (random(100) < 50 ? 150 : 50);
+        uint8_t val = (flicker * mqtt_brightness) / 255;
+        leds[i] = CRGB(val, val, val);
+      }
+      FastLED.show();
+
+    } else if (weather_state == "exceptional") {
+      // Rainbow multi effect for exceptional weather
+      uint8_t base_hue = rgb_hue >> 8;
+      rgb_hue += 20;
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t hue = base_hue + (i * 255 / LED_COUNT);
+        CHSV hsv(hue, 255, mqtt_brightness);
+        CRGB rgb;
+        hsv2rgb_rainbow(hsv, rgb);
+        leds[i] = rgb;
+      }
+      FastLED.show();
+
+    } else {
+      // Default/unknown: warm white
+      uint8_t val = (200 * mqtt_brightness) / 255;
+      writeLED({ val, (val * 95) / 100, (val * 85) / 100 });
+    }
+  } else if (circadian_enabled) {
+    // Circadian mode: Color temperature based on time of day
+    uint8_t hour = mqtt->getCircadianHour();
+    uint8_t r, g, b;
+
+    if (hour >= 6 && hour < 9) {
+      // Morning: warm orange/yellow sunrise
+      r = 255; g = 180; b = 80;
+    } else if (hour >= 9 && hour < 12) {
+      // Late morning: bright warm white
+      r = 255; g = 240; b = 200;
+    } else if (hour >= 12 && hour < 17) {
+      // Midday: cool daylight white
+      r = 240; g = 250; b = 255;
+    } else if (hour >= 17 && hour < 20) {
+      // Evening: warm golden
+      r = 255; g = 200; b = 100;
+    } else if (hour >= 20 && hour < 22) {
+      // Late evening: warm amber
+      r = 255; g = 150; b = 50;
+    } else {
+      // Night: dim warm red (sleep friendly)
+      r = 180; g = 80; b = 30;
+    }
+
+    // Scale by brightness
+    r = (r * mqtt_brightness) / 255;
+    g = (g * mqtt_brightness) / 255;
+    b = (b * mqtt_brightness) / 255;
+
+    writeLED({ r, g, b });
+  } else if (rainbow_multi_enabled) {
+    // Rainbow Multi: Each LED has a different color, rotating together
+    rgb_hue += 20;
+    uint8_t base_hue = rgb_hue >> 8;
+
+    // Scale brightness by MQTT brightness setting
+    uint8_t base_brightness = (mqtt_brightness * 180) / 255;
+    uint8_t pulse_range = (mqtt_brightness * 75) / 255;
+    uint8_t led_brightness = base_brightness + ((sin8(loop_counter) * pulse_range) / 255);
+
+    // Each LED gets a different hue offset (evenly distributed across spectrum)
+    for (int i = 0; i < LED_COUNT; i++) {
+      uint8_t hue = base_hue + (i * 255 / LED_COUNT);
+      CHSV hsv(hue, 255, led_brightness);
+      CRGB rgb;
+      hsv2rgb_rainbow(hsv, rgb);
+      leds[i] = rgb;
+    }
+    FastLED.show();
   } else if (rainbow_enabled) {
-    // Smooth hue rotation: 16-bit for fine transitions, faster cycle ~1 minute
+    // Rainbow: All LEDs same color, rotating through spectrum
     rgb_hue += 20;
     uint8_t hue8 = rgb_hue >> 8;
 

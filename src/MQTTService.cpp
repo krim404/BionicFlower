@@ -13,11 +13,17 @@ MQTTService* mqtt_shared_instance = nullptr;
 MQTTService::MQTTService() : mqtt_client(wifi_client) {
   last_reconnect_attempt = 0;
   last_sensor_publish = 0;
-  rainbow_enabled = true;
+  rainbow_enabled = false;
+  rainbow_multi_enabled = true;
+  circadian_enabled = false;
+  weather_enabled = false;
   light_on = true;
   brightness = 255;
   last_has_light_sensor = false;
   last_has_touch_sensor = false;
+  circadian_hour = 12;
+  weather_state = "sunny";
+  weather_temperature = 20.0f;
 }
 
 // MARK: Static Methods
@@ -114,6 +120,9 @@ void MQTTService::subscribeTopics() {
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/cover/set");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/cover/set_position");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/select/mode/set");
+  mqtt_client.subscribe(MQTT_BASE_TOPIC "/circadian/hour");
+  mqtt_client.subscribe(MQTT_BASE_TOPIC "/weather/state");
+  mqtt_client.subscribe(MQTT_BASE_TOPIC "/weather/temperature");
 
   Serial.println(PRINT_PREFIX + "Subscribed to command topics");
 }
@@ -159,6 +168,9 @@ void MQTTService::sendLightDiscovery() {
   JsonArray effects = doc["effect_list"].to<JsonArray>();
   effects.add("None");
   effects.add("Rainbow");
+  effects.add("Rainbow Multi");
+  effects.add("Circadian");
+  effects.add("Weather");
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["identifiers"][0] = "bionic_flower";
@@ -357,7 +369,17 @@ void MQTTService::publishLightState() {
   color["g"] = config.color.green;
   color["b"] = config.color.blue;
 
-  doc["effect"] = rainbow_enabled ? "Rainbow" : "None";
+  if (weather_enabled) {
+    doc["effect"] = "Weather";
+  } else if (circadian_enabled) {
+    doc["effect"] = "Circadian";
+  } else if (rainbow_multi_enabled) {
+    doc["effect"] = "Rainbow Multi";
+  } else if (rainbow_enabled) {
+    doc["effect"] = "Rainbow";
+  } else {
+    doc["effect"] = "None";
+  }
 
   char buffer[256];
   serializeJson(doc, buffer);
@@ -448,6 +470,15 @@ void MQTTService::handleMessage(char* topic, byte* payload, unsigned int length)
     handleCoverPositionCommand(payloadStr.toInt());
   } else if (topicStr == MQTT_BASE_TOPIC "/select/mode/set") {
     handleModeCommand(payloadStr);
+  } else if (topicStr == MQTT_BASE_TOPIC "/circadian/hour") {
+    circadian_hour = payloadStr.toInt();
+    Serial.println(PRINT_PREFIX + "Circadian hour: " + String(circadian_hour));
+  } else if (topicStr == MQTT_BASE_TOPIC "/weather/state") {
+    weather_state = payloadStr;
+    Serial.println(PRINT_PREFIX + "Weather state: " + weather_state);
+  } else if (topicStr == MQTT_BASE_TOPIC "/weather/temperature") {
+    weather_temperature = payloadStr.toFloat();
+    Serial.println(PRINT_PREFIX + "Weather temperature: " + String(weather_temperature));
   }
 }
 
@@ -460,11 +491,22 @@ void MQTTService::handleLightCommand(JsonDocument& doc) {
   // Check for effect first
   if (doc["effect"].is<const char*>()) {
     String effect = doc["effect"].as<String>();
-    if (effect == "Rainbow") {
+    // Reset all effects
+    rainbow_enabled = false;
+    rainbow_multi_enabled = false;
+    circadian_enabled = false;
+    weather_enabled = false;
+
+    if (effect == "Weather") {
+      weather_enabled = true;
+    } else if (effect == "Circadian") {
+      circadian_enabled = true;
+    } else if (effect == "Rainbow Multi") {
+      rainbow_multi_enabled = true;
+    } else if (effect == "Rainbow") {
       rainbow_enabled = true;
-    } else {
-      rainbow_enabled = false;
     }
+    // "None" leaves all disabled
   }
 
   // Handle brightness (applies to both rainbow and static color)
@@ -472,9 +514,12 @@ void MQTTService::handleLightCommand(JsonDocument& doc) {
     brightness = doc["brightness"].as<int>();
   }
 
-  // If color is set, disable rainbow
+  // If color is set, disable all effects
   if (doc["color"].is<JsonObject>()) {
     rainbow_enabled = false;
+    rainbow_multi_enabled = false;
+    circadian_enabled = false;
+    weather_enabled = false;
     JsonObject color = doc["color"];
     config.color.red = color["r"] | config.color.red;
     config.color.green = color["g"] | config.color.green;

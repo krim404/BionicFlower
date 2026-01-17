@@ -27,13 +27,24 @@ class MQTTService {
     void publishSensorStates();
     void publishModeState();
 
-    // Rainbow effect control
+    // Effect control
     bool isRainbowEnabled() { return rainbow_enabled; }
     void setRainbowEnabled(bool enabled) { rainbow_enabled = enabled; }
+    bool isRainbowMultiEnabled() { return rainbow_multi_enabled; }
+    void setRainbowMultiEnabled(bool enabled) { rainbow_multi_enabled = enabled; }
+    bool isCircadianEnabled() { return circadian_enabled; }
+    void setCircadianEnabled(bool enabled) { circadian_enabled = enabled; }
+    bool isWeatherEnabled() { return weather_enabled; }
+    void setWeatherEnabled(bool enabled) { weather_enabled = enabled; }
     uint8_t getBrightness() { return brightness; }
     void setBrightness(uint8_t b) { brightness = b; }
     bool isLightOn() { return light_on; }
     void setLightOn(bool on) { light_on = on; }
+
+    // External data for effects
+    uint8_t getCircadianHour() { return circadian_hour; }
+    String getWeatherState() { return weather_state; }
+    float getWeatherTemperature() { return weather_temperature; }
 
   private:
 
@@ -48,10 +59,18 @@ class MQTTService {
     unsigned long last_sensor_publish;
 
     bool rainbow_enabled;
+    bool rainbow_multi_enabled;
+    bool circadian_enabled;
+    bool weather_enabled;
     bool light_on;
     uint8_t brightness;
     bool last_has_light_sensor;
     bool last_has_touch_sensor;
+
+    // External data for effects
+    uint8_t circadian_hour;
+    String weather_state;
+    float weather_temperature;
 
     // MARK: Methods
     void connect();
