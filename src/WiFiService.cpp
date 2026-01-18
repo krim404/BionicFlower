@@ -4,6 +4,7 @@
 #include "WiFiService.h"
 #include "Credentials.h"
 #include <time.h>
+#include <esp_sntp.h>
 
 // MARK: Constants
 
@@ -71,8 +72,11 @@ void WiFiService::onEvent(WiFiEvent_t event) {
     case SYSTEM_EVENT_STA_GOT_IP:
       Serial.println(PRINT_PREFIX + "Connected! IP: " + WiFi.localIP().toString());
       // Initialize NTP with automatic DST handling
-      configTzTime(NTP_TIMEZONE, NTP_SERVER);
-      Serial.println(PRINT_PREFIX + "NTP configured (pool.ntp.org)");
+      // Enable DHCP NTP Option 42 - use DHCP-provided NTP server if available
+      esp_sntp_servermode_dhcp(1);
+      // Configure timezone and fallback NTP servers
+      configTzTime(NTP_TIMEZONE, NTP_SERVER, "time.google.com");
+      Serial.println(PRINT_PREFIX + "NTP configured (DHCP Option 42 enabled)");
       startCompleted(true);
       break;
     case SYSTEM_EVENT_STA_LOST_IP:

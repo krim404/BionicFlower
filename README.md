@@ -32,7 +32,7 @@ The flower is automatically discovered in Home Assistant (MQTT Auto-Discovery).
 
 ### Circadian Mode
 
-Automatically adjusts color temperature to the time of day:
+Automatically adjusts color temperature to the time of day using NTP:
 
 | Time | Color Mood |
 |------|------------|
@@ -43,19 +43,7 @@ Automatically adjusts color temperature to the time of day:
 | 20:00 - 22:00 | Warm amber |
 | 22:00 - 06:00 | Dimmed red (night) |
 
-**Home Assistant Automation:**
-```yaml
-automation:
-  - alias: "Bionic Flower Circadian Update"
-    trigger:
-      - platform: time_pattern
-        minutes: "/30"
-    action:
-      - service: mqtt.publish
-        data:
-          topic: "bionic_flower/circadian/hour"
-          payload: "{{ now().hour }}"
-```
+Time is automatically synchronized via NTP (with automatic DST handling). Configure your timezone in `Credentials.h`.
 
 ### Weather Mode
 
@@ -128,6 +116,10 @@ Effect order: None → Rainbow → Rainbow Multi → Circadian → Weather → N
    #define MQTT_PORT 1883
    #define MQTT_USER "mqtt"
    #define MQTT_PASSWORD "your_mqtt_password"
+
+   // Timezone (for Circadian effect)
+   // See: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+   #define NTP_TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin
    ```
 
 3. **Home Assistant MQTT broker** must be installed and configured
@@ -162,7 +154,6 @@ pio device monitor
 - `bionic_flower/cover/set` - OPEN/CLOSE/STOP
 - `bionic_flower/cover/set_position` - 0-100%
 - `bionic_flower/select/mode/set` - Automatic/Manual
-- `bionic_flower/circadian/hour` - Hour (0-23)
 - `bionic_flower/weather/state` - Weather state
 - `bionic_flower/weather/temperature` - Temperature (°C)
 
