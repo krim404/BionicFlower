@@ -17,7 +17,9 @@ MQTTService::MQTTService() : mqtt_client(wifi_client) {
   rainbow_multi_enabled = true;
   circadian_enabled = false;
   weather_enabled = false;
+  sensor_enabled = false;
   light_on = true;
+  adaptive_brightness_enabled = true;  // Default: ON
   brightness = 255;
   last_has_light_sensor = false;
   last_has_touch_sensor = false;
@@ -109,6 +111,7 @@ void MQTTService::reconnect() {
     publishLightState();
     publishCoverState();
     publishModeState();
+    publishAdaptiveBrightnessState();
     publishSensorStates();
   } else {
     Serial.println(PRINT_PREFIX + "Failed, rc=" + String(mqtt_client.state()));
@@ -120,7 +123,7 @@ void MQTTService::subscribeTopics() {
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/cover/set");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/cover/set_position");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/select/mode/set");
-  mqtt_client.subscribe(MQTT_BASE_TOPIC "/circadian/hour");
+  mqtt_client.subscribe(MQTT_BASE_TOPIC "/switch/adaptive_brightness/set");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/weather/state");
   mqtt_client.subscribe(MQTT_BASE_TOPIC "/weather/temperature");
 
@@ -133,6 +136,7 @@ void MQTTService::sendDiscoveryAll() {
   sendLightDiscovery();
   sendCoverDiscovery();
   sendModeDiscovery();
+  sendAdaptiveBrightnessDiscovery();
   sendTemperatureDiscovery();
 
   HardwareService* hw = HardwareService::getSharedInstance();
@@ -171,6 +175,7 @@ void MQTTService::sendLightDiscovery() {
   effects.add("Rainbow Multi");
   effects.add("Circadian");
   effects.add("Weather");
+  effects.add("Sensor");
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["identifiers"][0] = "bionic_flower";
@@ -228,6 +233,25 @@ void MQTTService::sendModeDiscovery() {
 
   mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/select/bionic_flower/mode/config", buffer, true);
   Serial.println(PRINT_PREFIX + "Sent mode discovery");
+}
+
+void MQTTService::sendAdaptiveBrightnessDiscovery() {
+  JsonDocument doc;
+
+  doc["name"] = "Bionic Flower Adaptive Brightness";
+  doc["unique_id"] = "bionic_flower_adaptive_brightness";
+  doc["command_topic"] = MQTT_BASE_TOPIC "/switch/adaptive_brightness/set";
+  doc["state_topic"] = MQTT_BASE_TOPIC "/switch/adaptive_brightness/state";
+  doc["icon"] = "mdi:brightness-auto";
+
+  JsonObject device = doc["device"].to<JsonObject>();
+  device["identifiers"][0] = "bionic_flower";
+
+  char buffer[512];
+  serializeJson(doc, buffer);
+
+  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/switch/bionic_flower/adaptive_brightness/config", buffer, true);
+  Serial.println(PRINT_PREFIX + "Sent adaptive brightness discovery");
 }
 
 void MQTTService::sendBrightnessSensorDiscovery() {
@@ -369,7 +393,9 @@ void MQTTService::publishLightState() {
   color["g"] = config.color.green;
   color["b"] = config.color.blue;
 
-  if (weather_enabled) {
+  if (sensor_enabled) {
+    doc["effect"] = "Sensor";
+  } else if (weather_enabled) {
     doc["effect"] = "Weather";
   } else if (circadian_enabled) {
     doc["effect"] = "Circadian";
@@ -440,6 +466,11 @@ void MQTTService::publishModeState() {
   mqtt_client.publish(MQTT_BASE_TOPIC "/select/mode/state", mode, true);
 }
 
+void MQTTService::publishAdaptiveBrightnessState() {
+  const char* state = adaptive_brightness_enabled ? "ON" : "OFF";
+  mqtt_client.publish(MQTT_BASE_TOPIC "/switch/adaptive_brightness/state", state, true);
+}
+
 // MARK: Message Callback
 
 void MQTTService::messageCallback(char* topic, byte* payload, unsigned int length) {
@@ -470,9 +501,8 @@ void MQTTService::handleMessage(char* topic, byte* payload, unsigned int length)
     handleCoverPositionCommand(payloadStr.toInt());
   } else if (topicStr == MQTT_BASE_TOPIC "/select/mode/set") {
     handleModeCommand(payloadStr);
-  } else if (topicStr == MQTT_BASE_TOPIC "/circadian/hour") {
-    circadian_hour = payloadStr.toInt();
-    Serial.println(PRINT_PREFIX + "Circadian hour: " + String(circadian_hour));
+  } else if (topicStr == MQTT_BASE_TOPIC "/switch/adaptive_brightness/set") {
+    handleAdaptiveBrightnessCommand(payloadStr);
   } else if (topicStr == MQTT_BASE_TOPIC "/weather/state") {
     weather_state = payloadStr;
     Serial.println(PRINT_PREFIX + "Weather state: " + weather_state);
@@ -496,8 +526,11 @@ void MQTTService::handleLightCommand(JsonDocument& doc) {
     rainbow_multi_enabled = false;
     circadian_enabled = false;
     weather_enabled = false;
+    sensor_enabled = false;
 
-    if (effect == "Weather") {
+    if (effect == "Sensor") {
+      sensor_enabled = true;
+    } else if (effect == "Weather") {
       weather_enabled = true;
     } else if (effect == "Circadian") {
       circadian_enabled = true;
@@ -520,6 +553,7 @@ void MQTTService::handleLightCommand(JsonDocument& doc) {
     rainbow_multi_enabled = false;
     circadian_enabled = false;
     weather_enabled = false;
+    sensor_enabled = false;
     JsonObject color = doc["color"];
     config.color.red = color["r"] | config.color.red;
     config.color.green = color["g"] | config.color.green;
@@ -579,4 +613,10 @@ void MQTTService::handleModeCommand(const String& mode) {
   config.is_autonomous = (mode == "Automatic");
   hw->setConfiguration(config);
   publishModeState();
+}
+
+void MQTTService::handleAdaptiveBrightnessCommand(const String& state) {
+  adaptive_brightness_enabled = (state == "ON");
+  Serial.println(PRINT_PREFIX + "Adaptive brightness: " + String(adaptive_brightness_enabled ? "ON" : "OFF"));
+  publishAdaptiveBrightnessState();
 }

@@ -6,12 +6,12 @@
 
 #define MOTOR_FULL_STEP_COUNT 14000 // number of motor steps for full up/down
 #define MOTOR_CURRENT_LOW 250
-#define DEFAULT_LOWER_BRIGHTNESS_THRESHOLD 0.2f // default brightness threshold
-#define DEFAULT_UPPER_BRIGHTNESS_THRESHOLD 0.4f // default brightness threshold
-#define DEFAULT_AMBIENT_BRIGHTNESS 0.3f
-#define DEFAULT_BRIGHTNESS_THRESHOLD_DISTANCE 0.1f
+#define DEFAULT_LOWER_BRIGHTNESS_THRESHOLD 0.01f // close at <= 1% brightness
+#define DEFAULT_UPPER_BRIGHTNESS_THRESHOLD 0.03f // open at >= 3% brightness
+#define DEFAULT_AMBIENT_BRIGHTNESS 0.02f
+#define DEFAULT_BRIGHTNESS_THRESHOLD_DISTANCE 0.01f
 #define DEFAULT_DISTANCE_THRESHOLD 0.6f // default ADC touch threshold
-#define DEFAULT_AUTONOMY_VALUE 1
+#define DEFAULT_AUTONOMY_VALUE 0  // Start in Manual mode
 #define MOTOR_SPEED_SLOW 0.002f
 #define MOTOR_SPEED_FAST 0.001f
 

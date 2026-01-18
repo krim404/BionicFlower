@@ -75,7 +75,13 @@ class HardwareService {
     bool touch_left_long_triggered;
     bool touch_right_long_triggered;
 
+    // Adaptive brightness
+    unsigned long last_adaptive_brightness_update;
+    uint8_t adaptive_brightness_factor;
+
     // MARK: Methods
+
+    void updateAdaptiveBrightness();
     
     void move(float position, float speed);
     void writeLED(Color color);

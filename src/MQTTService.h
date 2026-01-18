@@ -26,6 +26,7 @@ class MQTTService {
     void publishCoverState();
     void publishSensorStates();
     void publishModeState();
+    void publishAdaptiveBrightnessState();
 
     // Effect control
     bool isRainbowEnabled() { return rainbow_enabled; }
@@ -36,10 +37,14 @@ class MQTTService {
     void setCircadianEnabled(bool enabled) { circadian_enabled = enabled; }
     bool isWeatherEnabled() { return weather_enabled; }
     void setWeatherEnabled(bool enabled) { weather_enabled = enabled; }
+    bool isSensorEnabled() { return sensor_enabled; }
+    void setSensorEnabled(bool enabled) { sensor_enabled = enabled; }
     uint8_t getBrightness() { return brightness; }
     void setBrightness(uint8_t b) { brightness = b; }
     bool isLightOn() { return light_on; }
     void setLightOn(bool on) { light_on = on; }
+    bool isAdaptiveBrightnessEnabled() { return adaptive_brightness_enabled; }
+    void setAdaptiveBrightnessEnabled(bool enabled) { adaptive_brightness_enabled = enabled; }
 
     // External data for effects
     uint8_t getCircadianHour() { return circadian_hour; }
@@ -62,7 +67,9 @@ class MQTTService {
     bool rainbow_multi_enabled;
     bool circadian_enabled;
     bool weather_enabled;
+    bool sensor_enabled;
     bool light_on;
+    bool adaptive_brightness_enabled;
     uint8_t brightness;
     bool last_has_light_sensor;
     bool last_has_touch_sensor;
@@ -82,6 +89,7 @@ class MQTTService {
     void sendLightDiscovery();
     void sendCoverDiscovery();
     void sendModeDiscovery();
+    void sendAdaptiveBrightnessDiscovery();
     void sendBrightnessSensorDiscovery();
     void sendDistanceSensorDiscovery();
     void sendTouchLeftDiscovery();
@@ -103,6 +111,7 @@ class MQTTService {
     void handleCoverCommand(const String& command);
     void handleCoverPositionCommand(int position);
     void handleModeCommand(const String& mode);
+    void handleAdaptiveBrightnessCommand(const String& state);
 
 };
 

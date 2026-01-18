@@ -14,6 +14,7 @@ The flower is automatically discovered in Home Assistant (MQTT Auto-Discovery).
 - `light.bionic_flower` - LED control with brightness, color and effects
 - `cover.bionic_flower` - Motor control (open/close)
 - `select.bionic_flower_mode` - Mode selection (Automatic/Manual)
+- `switch.bionic_flower_adaptive_brightness` - Adaptive brightness based on ambient light
 - `sensor.bionic_flower_illuminance` - Light sensor (%)
 - `sensor.bionic_flower_proximity` - Distance sensor (%)
 - `sensor.bionic_flower_temperature` - Temperature sensor (°C)
@@ -29,6 +30,16 @@ The flower is automatically discovered in Home Assistant (MQTT Auto-Discovery).
 | **Rainbow Multi** | Rainbow with individual LED colors |
 | **Circadian** | Daylight simulation based on time of day |
 | **Weather** | Weather visualization with motor control |
+| **Sensor** | Motor reacts to ambient light (opens in light, closes in dark) |
+
+### Adaptive Brightness
+
+When enabled (default: ON), LED brightness automatically adjusts based on ambient light:
+- 1% ambient light → 5% LED brightness
+- 9%+ ambient light → 100% LED brightness
+- Linear scaling in between
+
+Updates every 15 seconds. Can be toggled via `switch.bionic_flower_adaptive_brightness`.
 
 ### Circadian Mode
 
@@ -84,9 +95,9 @@ automation:
           payload: "{{ state_attr('weather.home', 'temperature') }}"
 ```
 
-### Touch Control (Manual Mode)
+### Touch Control
 
-In Manual mode, the touch sensors can be used for local control:
+The touch sensors can be used for local control:
 
 | Action | Function |
 |--------|----------|
@@ -96,7 +107,7 @@ In Manual mode, the touch sensors can be used for local control:
 | **Right long** (>500ms) | Increase brightness |
 | **Both simultaneously** | Toggle LEDs on/off |
 
-Effect order: None → Rainbow → Rainbow Multi → Circadian → Weather → None ...
+Effect order: None → Rainbow → Rainbow Multi → Circadian → Weather → Sensor → None ...
 
 ## Setup
 
@@ -154,6 +165,7 @@ pio device monitor
 - `bionic_flower/cover/set` - OPEN/CLOSE/STOP
 - `bionic_flower/cover/set_position` - 0-100%
 - `bionic_flower/select/mode/set` - Automatic/Manual
+- `bionic_flower/switch/adaptive_brightness/set` - ON/OFF
 - `bionic_flower/weather/state` - Weather state
 - `bionic_flower/weather/temperature` - Temperature (°C)
 
@@ -162,6 +174,7 @@ pio device monitor
 - `bionic_flower/cover/state` - open/closed/stopped
 - `bionic_flower/cover/position` - 0-100%
 - `bionic_flower/select/mode/state` - Automatic/Manual
+- `bionic_flower/switch/adaptive_brightness/state` - ON/OFF
 - `bionic_flower/sensor/illuminance` - Brightness (%)
 - `bionic_flower/sensor/proximity` - Distance (%)
 - `bionic_flower/sensor/temperature` - Temperature (°C)

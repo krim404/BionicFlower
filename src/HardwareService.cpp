@@ -83,6 +83,10 @@ HardwareService::HardwareService() {
   touch_left_long_triggered = false;
   touch_right_long_triggered = false;
 
+  // Adaptive brightness init
+  last_adaptive_brightness_update = 0;
+  adaptive_brightness_factor = 255;  // Start at full brightness
+
   motor.setupPins();
 }
 
@@ -131,32 +135,25 @@ void HardwareService::setConfiguration(Configuration new_configuration) {
   Serial.print(", Lower Brightness Threshold: " + String(new_configuration.lower_brightness_threshold));
   Serial.print(", Upper Brightness Threshold: " + String(new_configuration.upper_brightness_threshold));
   Serial.print(", Distance Threshold: " + String(new_configuration.distance_threshold));
-  Serial.print(", Autonomous: " + String(new_configuration.is_autonomous));
   Serial.print(", Red: " + String(new_configuration.color.red));
   Serial.print(", Green: " + String(new_configuration.color.green));
   Serial.print(", Blue: " + String(new_configuration.color.blue));
   Serial.println();
 
-  boolean control_changed = false;
-
-  if (new_configuration.is_autonomous != configuration.is_autonomous) {
-    control_changed = true;
-    if (!new_configuration.is_autonomous) {
-      motor.stop();
-    }
-  }
-
-  if ((new_configuration.color.red != configuration.color.red)
+  boolean color_changed = (new_configuration.color.red != configuration.color.red)
       || (new_configuration.color.blue != configuration.color.blue)
-      || (new_configuration.color.green != configuration.color.green)) {
-    control_changed = true;
-  }
+      || (new_configuration.color.green != configuration.color.green);
 
   writeLED(new_configuration.color);
 
+  // Motor position change via MQTT/Web
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  bool sensor_effect_active = mqtt->isSensorEnabled();
+  bool weather_effect_active = mqtt->isWeatherEnabled();
+
+  // Only allow manual motor control if Sensor and Weather effects are not active
   if (((new_configuration.motor_position != configuration.motor_position) || (new_configuration.speed != configuration.speed))
-      && (!new_configuration.is_autonomous)
-      && (!control_changed)) {
+      && !sensor_effect_active && !weather_effect_active && !color_changed) {
 
     // The correct way to calculate the speed would be:
     // MOTOR_SPEED_FAST + ((1 - new_configuration.speed) * (MOTOR_SPEED_SLOW - MOTOR_SPEED_FAST));
@@ -187,6 +184,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     readSensors();
   }
 
+  // Update adaptive brightness (every 15s internally)
+  updateAdaptiveBrightness();
+
   // Check MQTT light state
   MQTTService* mqtt = MQTTService::getSharedInstance();
   bool light_on = mqtt->isLightOn();
@@ -194,10 +194,16 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   bool rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
   bool circadian_enabled = mqtt->isCircadianEnabled();
   bool weather_enabled = mqtt->isWeatherEnabled();
-  uint8_t mqtt_brightness = mqtt->getBrightness();
 
-  // Touch handling in manual mode
-  if (!configuration.is_autonomous && sensor_data.has_touch_sensor) {
+  // Apply adaptive brightness to MQTT brightness setting
+  uint8_t raw_mqtt_brightness = mqtt->getBrightness();
+  uint8_t mqtt_brightness = (raw_mqtt_brightness * adaptive_brightness_factor) / 255;
+
+  // Sensor effect state for touch handling
+  bool sensor_enabled = mqtt->isSensorEnabled();
+
+  // Touch handling (always active)
+  if (sensor_data.has_touch_sensor) {
     const unsigned long LONG_PRESS_DURATION = 500; // 500ms for long press
     const uint8_t BRIGHTNESS_STEP = 25;
     unsigned long now = millis();
@@ -254,21 +260,25 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       // Left touch released
       if (touch_left_was_pressed && !touch_left_long_triggered) {
         // Short press released: previous effect
-        if (weather_enabled) {
+        // Order: None -> Sensor -> Weather -> Circadian -> Rainbow Multi -> Rainbow -> None
+        if (sensor_enabled) {
+          mqtt->setSensorEnabled(false);
+          // None - static color
+        } else if (weather_enabled) {
           mqtt->setWeatherEnabled(false);
-          mqtt->setCircadianEnabled(true);
+          mqtt->setSensorEnabled(true);
         } else if (circadian_enabled) {
           mqtt->setCircadianEnabled(false);
-          mqtt->setRainbowMultiEnabled(true);
+          mqtt->setWeatherEnabled(true);
         } else if (rainbow_multi_enabled) {
           mqtt->setRainbowMultiEnabled(false);
-          mqtt->setRainbowEnabled(true);
+          mqtt->setCircadianEnabled(true);
         } else if (rainbow_enabled) {
           mqtt->setRainbowEnabled(false);
-          // None - static color
+          mqtt->setRainbowMultiEnabled(true);
         } else {
-          // None -> Weather (cycle)
-          mqtt->setWeatherEnabled(true);
+          // None -> Sensor (cycle backwards)
+          mqtt->setSensorEnabled(true);
         }
         mqtt->publishLightState();
       }
@@ -278,6 +288,7 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       // Right touch released
       if (touch_right_was_pressed && !touch_right_long_triggered) {
         // Short press released: next effect
+        // Order: None -> Rainbow -> Rainbow Multi -> Circadian -> Weather -> Sensor -> None
         if (rainbow_enabled) {
           mqtt->setRainbowEnabled(false);
           mqtt->setRainbowMultiEnabled(true);
@@ -289,9 +300,12 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
           mqtt->setWeatherEnabled(true);
         } else if (weather_enabled) {
           mqtt->setWeatherEnabled(false);
+          mqtt->setSensorEnabled(true);
+        } else if (sensor_enabled) {
+          mqtt->setSensorEnabled(false);
           // None - static color
         } else {
-          // None -> Rainbow (cycle)
+          // None -> Rainbow (cycle forwards)
           mqtt->setRainbowEnabled(true);
         }
         mqtt->publishLightState();
@@ -305,7 +319,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
     circadian_enabled = mqtt->isCircadianEnabled();
     weather_enabled = mqtt->isWeatherEnabled();
-    mqtt_brightness = mqtt->getBrightness();
+    sensor_enabled = mqtt->isSensorEnabled();
+    raw_mqtt_brightness = mqtt->getBrightness();
+    mqtt_brightness = (raw_mqtt_brightness * adaptive_brightness_factor) / 255;
   }
 
   // Weather motor control - runs independently of LED state
@@ -335,9 +351,16 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   if (!light_on) {
     writeLED({ 0, 0, 0 });
   }
-  // Turn off LEDs when light sensor detects darkness (only in autonomous mode)
-  else if (configuration.is_autonomous && sensor_data.has_light_sensor && sensor_data.brightness < 0.02f) {
+  // Turn off LEDs when light sensor detects darkness (only in Sensor effect mode)
+  else if (sensor_enabled && sensor_data.has_light_sensor && sensor_data.brightness <= configuration.lower_brightness_threshold) {
     writeLED({ 0, 0, 0 });
+  } else if (sensor_enabled) {
+    // Sensor effect: static color from configuration, scaled by MQTT brightness
+    Color scaled_color;
+    scaled_color.red = (configuration.color.red * mqtt_brightness) / 255;
+    scaled_color.green = (configuration.color.green * mqtt_brightness) / 255;
+    scaled_color.blue = (configuration.color.blue * mqtt_brightness) / 255;
+    writeLED(scaled_color);
   } else if (weather_enabled) {
     // Weather mode: Individual animations for each weather state
     String weather_state = mqtt->getWeatherState();
@@ -711,29 +734,13 @@ void HardwareService::readSensors() {
 
 void HardwareService::updateMotor() {
   if (!motor_calibration_finished) return;
-  if (!configuration.is_autonomous) return;
 
-  // Don't run autonomous motor control if any effect is active
+  // Only run sensor-based motor control if Sensor effect is active
   MQTTService* mqtt = MQTTService::getSharedInstance();
-  if (mqtt->isWeatherEnabled() || mqtt->isCircadianEnabled() ||
-      mqtt->isRainbowEnabled() || mqtt->isRainbowMultiEnabled()) return;
+  if (!mqtt->isSensorEnabled()) return;
 
   configuration.motor_position = 1 - ((float)(motor.getMotorPosition()) / (float)(32 * MOTOR_FULL_STEP_COUNT));
-  Serial.println(PRINT_PREFIX + "Updating motor..." + String(light_measurement_count));
-
-  if (sensor_data.has_touch_sensor) {
-    if (sensor_data.touch_right) {
-      Serial.println(PRINT_PREFIX + "Open due to: Touch right");
-      move(MOTOR_POSITION_OPEN, MOTOR_SPEED_FAST);
-      reopen_cycle_count = MAX_REOPENCYCLES_TOUCH;
-      return;
-    } else if (sensor_data.touch_left) {
-      Serial.println(PRINT_PREFIX + "Close due to: Touch left");
-      move(MOTOR_POSITION_CLOSED, MOTOR_SPEED_FAST);
-      reopen_cycle_count = MAX_REOPENCYCLES_TOUCH;
-      return;
-    }
-  }
+  Serial.println(PRINT_PREFIX + "Sensor effect: Updating motor..." + String(light_measurement_count));
 
   if ((sensor_data.has_light_sensor) && (light_measurement_count >= MAX_MEASUREMENT_COUNT)) {
     #if ENABLE_DISTANCE
@@ -745,19 +752,22 @@ void HardwareService::updateMotor() {
     }
     #endif
 
-    if (configuration.lower_brightness_threshold > sensor_data.brightness) {
-      Serial.println(PRINT_PREFIX + "Close due to: Too dark");
+    // Close when brightness <= lower threshold (1%)
+    if (sensor_data.brightness <= configuration.lower_brightness_threshold) {
+      Serial.println(PRINT_PREFIX + "Close due to: Too dark (" + String(sensor_data.brightness * 100) + "%)");
       move(MOTOR_POSITION_CLOSED, MOTOR_SPEED_FAST);
       reopen_cycle_count = MAX_REOPENCYCLES_LIGHT;
       return;
-    } else if (configuration.upper_brightness_threshold < sensor_data.brightness) {
+    }
+    // Open when brightness >= upper threshold (3%)
+    else if (sensor_data.brightness >= configuration.upper_brightness_threshold) {
       if (reopen_cycle_count <= 0) {
-        Serial.println(PRINT_PREFIX + "Open due to: Too bright");
+        Serial.println(PRINT_PREFIX + "Open due to: Bright enough (" + String(sensor_data.brightness * 100) + "%)");
         move(MOTOR_POSITION_OPEN, MOTOR_SPEED_FAST);
         reopen_cycle_count = 0;
         return;
       } else {
-        Serial.println(PRINT_PREFIX + "Could open due to: Too bright");
+        Serial.println(PRINT_PREFIX + "Could open due to: Bright enough");
         reopen_cycle_count--;
       }
     }
@@ -795,4 +805,43 @@ void HardwareService::move(float position, float speed) {
   motor.setSteppingMode(MotorLogic::M1);
   motor.wakeup();
   motor.rotate(speed);
+}
+
+void HardwareService::updateAdaptiveBrightness() {
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  if (!mqtt->isAdaptiveBrightnessEnabled()) {
+    adaptive_brightness_factor = 255;
+    return;
+  }
+
+  // Only update every 15 seconds
+  unsigned long now = millis();
+  if (now - last_adaptive_brightness_update < 15000) {
+    return;
+  }
+  last_adaptive_brightness_update = now;
+
+  if (!sensor_data.has_light_sensor) {
+    adaptive_brightness_factor = 255;
+    return;
+  }
+
+  // Adaptive brightness scaling:
+  // 1% ambient = 5% LED (13/255)
+  // 9% ambient = 100% LED (255/255)
+  // Linear interpolation between these points
+  float brightness_percent = sensor_data.brightness * 100.0f;  // 0-10% range typically
+
+  if (brightness_percent >= 9.0f) {
+    adaptive_brightness_factor = 255;
+  } else if (brightness_percent <= 1.0f) {
+    adaptive_brightness_factor = 13;  // 5% of 255
+  } else {
+    // Linear interpolation: 1% -> 13, 9% -> 255
+    // slope = (255 - 13) / (9 - 1) = 242 / 8 = 30.25
+    adaptive_brightness_factor = (uint8_t)(13 + (brightness_percent - 1.0f) * 30.25f);
+  }
+
+  Serial.println(PRINT_PREFIX + "Adaptive brightness: ambient=" + String(brightness_percent, 1) +
+                 "% -> LED factor=" + String(adaptive_brightness_factor * 100 / 255) + "%");
 }
