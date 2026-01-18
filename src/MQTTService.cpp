@@ -138,6 +138,7 @@ void MQTTService::sendDiscoveryAll() {
   sendModeDiscovery();
   sendAdaptiveBrightnessDiscovery();
   sendTemperatureDiscovery();
+  sendWeatherStateSensorDiscovery();
 
   HardwareService* hw = HardwareService::getSharedInstance();
   SensorData data = hw->getSensorData();
@@ -354,6 +355,24 @@ void MQTTService::sendTemperatureDiscovery() {
   Serial.println(PRINT_PREFIX + "Sent temperature sensor discovery");
 }
 
+void MQTTService::sendWeatherStateSensorDiscovery() {
+  JsonDocument doc;
+
+  doc["name"] = "Bionic Flower Weather";
+  doc["unique_id"] = "bionic_flower_weather";
+  doc["state_topic"] = MQTT_BASE_TOPIC "/sensor/weather";
+  doc["icon"] = "mdi:weather-partly-cloudy";
+
+  JsonObject device = doc["device"].to<JsonObject>();
+  device["identifiers"][0] = "bionic_flower";
+
+  char buffer[512];
+  serializeJson(doc, buffer);
+
+  mqtt_client.publish(MQTT_DISCOVERY_PREFIX "/sensor/bionic_flower/weather/config", buffer, true);
+  Serial.println(PRINT_PREFIX + "Sent weather state sensor discovery");
+}
+
 // MARK: Remove Discovery (hot-unplug)
 
 void MQTTService::removeBrightnessSensorDiscovery() {
@@ -459,6 +478,13 @@ void MQTTService::publishSensorStates() {
   // ESP32 internal temperature (with calibration offset, raw value is ~30°C too high)
   float temp = temperatureRead() - 30.0f;
   mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/temperature", String(temp).c_str());
+
+  // Weather state (only publish if weather effect is enabled)
+  if (weather_enabled) {
+    mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/weather", weather_state.c_str(), true);
+  } else {
+    mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/weather", "disabled", true);
+  }
 }
 
 void MQTTService::publishModeState() {

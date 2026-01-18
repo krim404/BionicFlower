@@ -18,6 +18,7 @@ The flower is automatically discovered in Home Assistant (MQTT Auto-Discovery).
 - `sensor.bionic_flower_illuminance` - Light sensor (%)
 - `sensor.bionic_flower_proximity` - Distance sensor (%)
 - `sensor.bionic_flower_temperature` - Temperature sensor (°C)
+- `sensor.bionic_flower_weather` - Current weather state (when Weather effect active)
 - `binary_sensor.bionic_flower_touch_left` - Touch left
 - `binary_sensor.bionic_flower_touch_right` - Touch right
 

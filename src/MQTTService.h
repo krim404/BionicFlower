@@ -96,6 +96,7 @@ class MQTTService {
     void sendTouchLeftDiscovery();
     void sendTouchRightDiscovery();
     void sendTemperatureDiscovery();
+    void sendWeatherStateSensorDiscovery();
 
     // Remove discovery (for hot-unplug)
     void removeBrightnessSensorDiscovery();
