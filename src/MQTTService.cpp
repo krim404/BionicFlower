@@ -475,8 +475,8 @@ void MQTTService::publishSensorStates() {
     mqtt_client.publish(MQTT_BASE_TOPIC "/binary_sensor/touch_right", data.touch_right ? "ON" : "OFF");
   }
 
-  // ESP32 internal temperature (with calibration offset, raw value is ~30°C too high)
-  float temp = temperatureRead() - 30.0f;
+  // ESP32 internal temperature (with calibration offset, raw value is ~33°C too high)
+  float temp = temperatureRead() - 33.0f;
   mqtt_client.publish(MQTT_BASE_TOPIC "/sensor/temperature", String(temp).c_str());
 
   // Weather state (only publish if weather effect is enabled)
