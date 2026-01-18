@@ -87,6 +87,10 @@ HardwareService::HardwareService() {
   last_adaptive_brightness_update = 0;
   adaptive_brightness_factor = 255;  // Start at full brightness
 
+  // NVS debouncing init
+  nvs_save_requested_at = 0;
+  nvs_save_pending = false;
+
   motor.setupPins();
 }
 
@@ -104,6 +108,9 @@ HardwareService* HardwareService::getSharedInstance() {
 boolean HardwareService::start() {
   sensor_timer.detach();
 
+  // Load saved state from NVS before showing LED indicator
+  loadStateFromNVS();
+
   writeLED({ 0, 255, 0 });
   delay(500);
   writeLED({ 255, 0, 0 });
@@ -114,6 +121,8 @@ boolean HardwareService::start() {
 
   Serial.println(PRINT_PREFIX + "Calibrating motor...");
 
+  // Store intended position from NVS, then calibrate to closed
+  float saved_position = configuration.motor_position;
   intended_motor_position = MOTOR_POSITION_OPEN;
   move(MOTOR_POSITION_CLOSED, MOTOR_SPEED_FAST);
   delay((1000 * MOTOR_FULL_STEP_COUNT * MOTOR_SPEED_FAST) + 20);
@@ -124,8 +133,15 @@ boolean HardwareService::start() {
   }
 
   motor_calibration_finished = true;
-
   Serial.println(PRINT_PREFIX + "Motor calibration done.");
+
+  // Move to saved position after calibration
+  if (saved_position > 0.01f) {
+    Serial.println(PRINT_PREFIX + "Moving to saved position: " + String(saved_position));
+    move(saved_position, MOTOR_SPEED_FAST);
+    configuration.motor_position = saved_position;
+  }
+
   return true;
 }
 
@@ -163,6 +179,9 @@ void HardwareService::setConfiguration(Configuration new_configuration) {
   }
 
   this->configuration = new_configuration;
+
+  // Save state to NVS
+  saveStateToNVS();
 }
 
 void HardwareService::resetSensorData() {
@@ -186,6 +205,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
   // Update adaptive brightness (every 15s internally)
   updateAdaptiveBrightness();
+
+  // Check if NVS save is pending (debounced)
+  checkPendingNVSSave();
 
   // Check MQTT light state
   MQTTService* mqtt = MQTTService::getSharedInstance();
@@ -844,4 +866,91 @@ void HardwareService::updateAdaptiveBrightness() {
 
   Serial.println(PRINT_PREFIX + "Adaptive brightness: ambient=" + String(brightness_percent, 1) +
                  "% -> LED factor=" + String(adaptive_brightness_factor * 100 / 255) + "%");
+}
+
+void HardwareService::saveStateToNVS() {
+  // Debounce: only mark as pending, actual save happens in loop()
+  nvs_save_pending = true;
+  nvs_save_requested_at = millis();
+}
+
+void HardwareService::checkPendingNVSSave() {
+  // Save to NVS 3 seconds after last change request (debouncing)
+  if (!nvs_save_pending) return;
+
+  unsigned long now = millis();
+  if (now - nvs_save_requested_at < 3000) return;
+
+  nvs_save_pending = false;
+
+  Preferences prefs;
+  prefs.begin("bionic", false);
+
+  // Save configuration
+  prefs.putFloat("motor_pos", configuration.motor_position);
+  prefs.putFloat("speed", configuration.speed);
+  prefs.putFloat("lower_bright", configuration.lower_brightness_threshold);
+  prefs.putFloat("upper_bright", configuration.upper_brightness_threshold);
+  prefs.putFloat("dist_thresh", configuration.distance_threshold);
+  prefs.putBool("is_auto", configuration.is_autonomous);
+  prefs.putUChar("color_r", configuration.color.red);
+  prefs.putUChar("color_g", configuration.color.green);
+  prefs.putUChar("color_b", configuration.color.blue);
+
+  // Save MQTT state
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  prefs.putBool("light_on", mqtt->isLightOn());
+  prefs.putUChar("brightness", mqtt->getBrightness());
+  prefs.putBool("rainbow", mqtt->isRainbowEnabled());
+  prefs.putBool("rainbow_m", mqtt->isRainbowMultiEnabled());
+  prefs.putBool("circadian", mqtt->isCircadianEnabled());
+  prefs.putBool("weather", mqtt->isWeatherEnabled());
+  prefs.putBool("sensor", mqtt->isSensorEnabled());
+  prefs.putBool("adapt_br", mqtt->isAdaptiveBrightnessEnabled());
+
+  prefs.end();
+  Serial.println(PRINT_PREFIX + "State saved to NVS");
+}
+
+void HardwareService::loadStateFromNVS() {
+  Preferences prefs;
+  prefs.begin("bionic", true);  // read-only
+
+  // Check if data exists
+  if (!prefs.isKey("color_r")) {
+    prefs.end();
+    Serial.println(PRINT_PREFIX + "No saved state in NVS");
+    return;
+  }
+
+  // Load configuration
+  configuration.motor_position = prefs.getFloat("motor_pos", MOTOR_POSITION_CLOSED);
+  configuration.speed = prefs.getFloat("speed", 0.5f);
+  configuration.lower_brightness_threshold = prefs.getFloat("lower_bright", DEFAULT_LOWER_BRIGHTNESS_THRESHOLD);
+  configuration.upper_brightness_threshold = prefs.getFloat("upper_bright", DEFAULT_UPPER_BRIGHTNESS_THRESHOLD);
+  configuration.distance_threshold = prefs.getFloat("dist_thresh", DEFAULT_DISTANCE_THRESHOLD);
+  configuration.is_autonomous = prefs.getBool("is_auto", false);
+  configuration.color.red = prefs.getUChar("color_r", 0);
+  configuration.color.green = prefs.getUChar("color_g", 145);
+  configuration.color.blue = prefs.getUChar("color_b", 220);
+
+  // Load MQTT state
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+  mqtt->setLightOn(prefs.getBool("light_on", true));
+  mqtt->setBrightness(prefs.getUChar("brightness", 255));
+  mqtt->setRainbowEnabled(prefs.getBool("rainbow", false));
+  mqtt->setRainbowMultiEnabled(prefs.getBool("rainbow_m", false));
+  mqtt->setCircadianEnabled(prefs.getBool("circadian", false));
+  mqtt->setWeatherEnabled(prefs.getBool("weather", false));
+  mqtt->setSensorEnabled(prefs.getBool("sensor", false));
+  mqtt->setAdaptiveBrightnessEnabled(prefs.getBool("adapt_br", true));
+
+  prefs.end();
+
+  Serial.println(PRINT_PREFIX + "State loaded from NVS:");
+  Serial.println(PRINT_PREFIX + "  Color: R=" + String(configuration.color.red) +
+                 " G=" + String(configuration.color.green) +
+                 " B=" + String(configuration.color.blue));
+  Serial.println(PRINT_PREFIX + "  Brightness: " + String(mqtt->getBrightness()));
+  Serial.println(PRINT_PREFIX + "  Light on: " + String(mqtt->isLightOn()));
 }

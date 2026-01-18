@@ -4,7 +4,6 @@
 <head>
     <link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="css/styles.css">
-    <script src="js/script.js"></script>
     <title>Bionic-Flower</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="utf-8" />
@@ -14,10 +13,170 @@
             -webkit-user-select: none;
             -ms-user-select: none;
         }
+        /* Global controls section */
+        .global-controls {
+            padding: 20px 15px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .global-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .global-controls-row .element {
+            flex: 1 1 200px;
+            max-width: 300px;
+            min-width: 150px;
+        }
+        /* Effect selector */
+        .effect-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .effect-select {
+            width: 100%;
+            max-width: 280px;
+            padding: 12px 15px;
+            font-size: 15px;
+            border: 2px solid #0091DC;
+            border-radius: 10px;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .effect-select:hover {
+            border-color: #006ba7;
+            box-shadow: 0 2px 8px rgba(0,145,220,0.2);
+        }
+        .effect-select:focus {
+            outline: none;
+            border-color: #006ba7;
+            box-shadow: 0 0 0 3px rgba(0,145,220,0.15);
+        }
+        /* Brightness container */
+        .brightness-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        /* Adaptive Brightness toggle switch */
+        .adaptive-brightness-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 56px;
+            height: 30px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 30px;
+        }
+        .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 24px;
+            width: 24px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .slider-toggle {
+            background-color: #0091DC;
+        }
+        input:focus + .slider-toggle {
+            box-shadow: 0 0 0 3px rgba(0,145,220,0.2);
+        }
+        input:checked + .slider-toggle:before {
+            transform: translateX(26px);
+        }
+        .slider-toggle.round {
+            border-radius: 30px;
+        }
+        .slider-toggle.round:before {
+            border-radius: 50%;
+        }
+        /* Global color picker */
+        .global-color-picker-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .global-color-picker-container .color-picker {
+            width: 70px;
+            height: 45px;
+            border: 2px solid #0091DC;
+            border-radius: 10px;
+            cursor: pointer;
+            padding: 2px;
+            transition: all 0.2s ease;
+        }
+        .global-color-picker-container .color-picker:hover {
+            box-shadow: 0 2px 8px rgba(0,145,220,0.3);
+            transform: scale(1.05);
+        }
+        /* Weather preview */
+        .weather-preview-container {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            border: 2px dashed #ffa000;
+            border-radius: 12px;
+        }
+        .weather-preview-container .label-title {
+            color: #e65100;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .weather-preview-container .effect-select {
+            border-color: #ffa000;
+            background-color: white;
+        }
+        .weather-preview-container .effect-select:hover {
+            border-color: #ff6f00;
+            box-shadow: 0 2px 8px rgba(255,160,0,0.3);
+        }
+        .weather-preview-container .effect-select:focus {
+            border-color: #ff6f00;
+            box-shadow: 0 0 0 3px rgba(255,160,0,0.2);
+        }
+        /* Label styling */
+        .label-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 
 <body onload="" overflow="scroll">
+    <!-- Hidden elements required by script.js -->
+    <input type="color" id="color-picker" style="display:none">
+    <input type="color" id="color-picker-manual" style="display:none">
+
     <nav class="navbar navbar-default container nav-justified" role="navigation">
         <div class="navbar-container">
             <div class="navbar-tab-container">
@@ -45,10 +204,74 @@
             <div class="bionic-container">
                 <h3>Bionic Flower</h3>
             </div>
+
+            <!-- Global Controls (work in both modes) -->
+            <div class="global-controls">
+                <!-- Row 1: Effect and Color -->
+                <div class="global-controls-row">
+                    <div class="element effect-container">
+                        <p align="center" class="label-title">LED Effect</p>
+                        <select id="effect-select" class="effect-select">
+                            <option value="none">None (Static Color)</option>
+                            <option value="rainbow">Rainbow</option>
+                            <option value="rainbow_multi">Rainbow Multi</option>
+                            <option value="circadian">Circadian</option>
+                            <option value="weather">Weather</option>
+                            <option value="sensor">Sensor</option>
+                        </select>
+                    </div>
+                    <div class="element global-color-picker-container">
+                        <p class="label-title">Color</p>
+                        <input type="color" id="color-picker-global" class="color-picker">
+                    </div>
+                </div>
+                <!-- Row 2: Brightness and Adaptive -->
+                <div class="global-controls-row">
+                    <div class="element brightness-container">
+                        <p align="center" class="label-title">Brightness</p>
+                        <input id="brightness-slider" data-slider-tooltip="hide" data-slider-id="SC"
+                            type="range" data-slider-min="0" data-slider-max="1000" data-slider-step="1"
+                            data-slider-ticks="[0, 1000]" data-slider-ticks-labels='["0%", "100%"]'
+                            data-slider-ticks-snap-bounds="1" />
+                        <div class="slider-value-label">
+                            <p id="brightness-slider-title"></p>
+                        </div>
+                    </div>
+                    <div class="element adaptive-brightness-container">
+                        <p align="center" class="label-title">Adaptive Brightness</p>
+                        <label class="switch">
+                            <input type="checkbox" id="adaptive-brightness-toggle" checked>
+                            <span class="slider-toggle round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <div class="container tab-content">
                 <!-- Manual Tab -->
                 <div id="manual" class="tab-pane row fade in active">
                     <div class="manual-tab-container">
+                        <!-- Weather Preview -->
+                        <div class="element weather-preview-container">
+                            <p align="center" class="label-title">Weather Preview</p>
+                            <select id="weather-debug-select" class="effect-select">
+                                <option value="">-- Select Weather --</option>
+                                <option value="sunny">Sunny</option>
+                                <option value="clear-night">Clear Night</option>
+                                <option value="partlycloudy">Partly Cloudy</option>
+                                <option value="cloudy">Cloudy</option>
+                                <option value="fog">Fog</option>
+                                <option value="windy">Windy</option>
+                                <option value="rainy">Rainy</option>
+                                <option value="pouring">Pouring</option>
+                                <option value="lightning">Lightning</option>
+                                <option value="lightning-rainy">Lightning + Rain</option>
+                                <option value="snowy">Snowy</option>
+                                <option value="snowy-rainy">Snowy + Rain</option>
+                                <option value="hail">Hail</option>
+                                <option value="exceptional">Exceptional</option>
+                            </select>
+                        </div>
                         <!-- Motor position slider-->
                         <div class="element motor-position-container">
                             <p align="center" class="label-title">Motor position</p>
@@ -73,13 +296,6 @@
                                 <p id="speed-slider-title">
                             </div>
                         </div>
-                        <!-- Color picker -->
-                        <div class="element color-picker-container">
-                            <p class="label-title">Pick a color</p>
-                            <div class="color-picker-input-container">
-                                <input type="color" id="color-picker-manual" class="color-picker">
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <!-- Autonomous Tab -->
@@ -101,13 +317,6 @@
                             </div>
                             <div class="calibrate-button">
                                 <button onclick="calibrate()">Calibrate</button>
-                            </div>
-                        </div>
-                        <!-- Color picker -->
-                        <div class="element color-picker-container">
-                            <p class="label-title">Pick a color</p>
-                            <div class="color-picker-input-container">
-                                <input type="color" id="color-picker" class="color-picker">
                             </div>
                         </div>
                         <!-- Sensors -->
@@ -137,6 +346,8 @@
                 </div>
             </div>
         </div>
+    <script src="js/script.js"></script>
+    <script src="js/app.js"></script>
 </body>
 
 </html>

@@ -5,6 +5,7 @@
 // MARK: Includes
 
 #include <FastLED.h>
+#include <Preferences.h>
 #include "Models.h"
 #include "Settings.h"
 #include <Wire.h>
@@ -39,6 +40,8 @@ class HardwareService {
     void updateMotor();
     boolean start();
     void resetSensorData();
+    void saveStateToNVS();
+    void loadStateFromNVS();
 
   protected:
 
@@ -79,7 +82,13 @@ class HardwareService {
     unsigned long last_adaptive_brightness_update;
     uint8_t adaptive_brightness_factor;
 
+    // NVS debouncing
+    unsigned long nvs_save_requested_at;
+    bool nvs_save_pending;
+
     // MARK: Methods
+
+    void checkPendingNVSSave();
 
     void updateAdaptiveBrightness();
     

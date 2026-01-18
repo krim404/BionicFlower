@@ -49,6 +49,7 @@ class MQTTService {
     // External data for effects
     uint8_t getCircadianHour() { return circadian_hour; }
     String getWeatherState() { return weather_state; }
+    void setWeatherState(const String& state) { weather_state = state; }
     float getWeatherTemperature() { return weather_temperature; }
 
   private:

@@ -411,15 +411,18 @@ void MQTTService::publishLightState() {
   serializeJson(doc, buffer);
 
   mqtt_client.publish(MQTT_BASE_TOPIC "/light/state", buffer, true);
+
+  // Save state to NVS whenever light state changes
+  hw->saveStateToNVS();
 }
 
 void MQTTService::publishCoverState() {
   HardwareService* hw = HardwareService::getSharedInstance();
   Configuration config = hw->getConfiguration();
 
-  // motor_position: 0 = open (physically), 1 = closed (physically)
+  // motor_position: 0 = closed (MOTOR_POSITION_CLOSED), 1 = open (MOTOR_POSITION_OPEN)
   // For Home Assistant: 100% = open, 0% = closed
-  // Direct mapping without inversion
+  // Direct mapping: motor_position * 100 = HA position
   int position = (int)(config.motor_position * 100);
 
   const char* state;

@@ -22,6 +22,11 @@ const String KEY_TOUCH_RIGHT = "touch_right";
 const String KEY_HAS_TOUCH = "has_touch";
 const String KEY_HAS_LIGHT = "has_light";
 const String KEY_SPEED = "speed";
+const String KEY_EFFECT = "effect";
+const String KEY_LED_BRIGHTNESS = "led_brightness";
+const String KEY_ADAPTIVE_BRIGHTNESS = "adaptive_brightness";
+const String KEY_WEATHER_DEBUG = "weather_debug";
+const String KEY_WEATHER_STATE = "weather_state";
 
 // MARK: Initialization
 
@@ -120,6 +125,15 @@ void WebService::handleCalibrate(AsyncWebServerRequest *request) {
 void WebService::handleUpdateWeb(AsyncWebServerRequest *request) {
   Configuration configuration = hardware_service->getConfiguration();
   SensorData sensor_data = hardware_service->getSensorData();
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+
+  // Determine current effect
+  String effect = "none";
+  if (mqtt->isRainbowEnabled()) effect = "rainbow";
+  else if (mqtt->isRainbowMultiEnabled()) effect = "rainbow_multi";
+  else if (mqtt->isCircadianEnabled()) effect = "circadian";
+  else if (mqtt->isWeatherEnabled()) effect = "weather";
+  else if (mqtt->isSensorEnabled()) effect = "sensor";
 
   String response =
     KEY_MOTOR_POSITION + "=" + String(configuration.motor_position * 100) + "&" +
@@ -132,7 +146,11 @@ void WebService::handleUpdateWeb(AsyncWebServerRequest *request) {
     KEY_TOUCH_LEFT + "=" + String(sensor_data.touch_left ? 1 : 0) + "&" +
     KEY_TOUCH_RIGHT + "=" + String(sensor_data.touch_right ? 1 : 0) + "&" +
     KEY_HAS_LIGHT + "=" + String(sensor_data.has_light_sensor ? 1 : 0) + "&" +
-    KEY_HAS_TOUCH + "=" + String(sensor_data.has_touch_sensor ? 1 : 0);
+    KEY_HAS_TOUCH + "=" + String(sensor_data.has_touch_sensor ? 1 : 0) + "&" +
+    KEY_EFFECT + "=" + effect + "&" +
+    KEY_LED_BRIGHTNESS + "=" + String(mqtt->getBrightness() * 100 / 255) + "&" +
+    KEY_ADAPTIVE_BRIGHTNESS + "=" + String(mqtt->isAdaptiveBrightnessEnabled() ? 1 : 0) + "&" +
+    KEY_WEATHER_STATE + "=" + (mqtt->isWeatherEnabled() ? mqtt->getWeatherState() : "none");
 
   Serial.println(PRINT_PREFIX + "Update web with \"" + response + "\".");
   request->send(200, TEXT_PLAIN, response);
@@ -142,6 +160,15 @@ void WebService::handleReadADC(AsyncWebServerRequest *request) {
   Serial.println(PRINT_PREFIX + "Read sensor data.");
   Configuration configuration = hardware_service->getConfiguration();
   SensorData sensor_data = hardware_service->getSensorData();
+  MQTTService* mqtt = MQTTService::getSharedInstance();
+
+  // Determine current effect
+  String effect = "none";
+  if (mqtt->isRainbowEnabled()) effect = "rainbow";
+  else if (mqtt->isRainbowMultiEnabled()) effect = "rainbow_multi";
+  else if (mqtt->isCircadianEnabled()) effect = "circadian";
+  else if (mqtt->isWeatherEnabled()) effect = "weather";
+  else if (mqtt->isSensorEnabled()) effect = "sensor";
 
   String response =
     KEY_BRIGHTNESS + "=" + String(sensor_data.brightness * 100) + "&" +
@@ -156,7 +183,11 @@ void WebService::handleReadADC(AsyncWebServerRequest *request) {
     KEY_TOUCH_LEFT + "=" + String(sensor_data.touch_left ? 1 : 0) + "&" +
     KEY_TOUCH_RIGHT + "=" + String(sensor_data.touch_right ? 1 : 0) + "&" +
     KEY_HAS_LIGHT + "=" + String(sensor_data.has_light_sensor ? 1 : 0) + "&" +
-    KEY_HAS_TOUCH + "=" + String(sensor_data.has_touch_sensor ? 1 : 0);
+    KEY_HAS_TOUCH + "=" + String(sensor_data.has_touch_sensor ? 1 : 0) + "&" +
+    KEY_EFFECT + "=" + effect + "&" +
+    KEY_LED_BRIGHTNESS + "=" + String(mqtt->getBrightness() * 100 / 255) + "&" +
+    KEY_ADAPTIVE_BRIGHTNESS + "=" + String(mqtt->isAdaptiveBrightnessEnabled() ? 1 : 0) + "&" +
+    KEY_WEATHER_STATE + "=" + (mqtt->isWeatherEnabled() ? mqtt->getWeatherState() : "none");
 
   request->send(200, TEXT_PLAIN, response);
 }
@@ -199,9 +230,81 @@ void WebService::handleUpdateFromWeb(AsyncWebServerRequest *request) {
   // Sync with MQTT
   MQTTService* mqtt = MQTTService::getSharedInstance();
 
-  // If color was changed via web, disable rainbow effect
-  if (request->hasArg(KEY_COLOR.c_str())) {
+  // Handle effect change
+  if (request->hasArg(KEY_EFFECT.c_str())) {
+    String effect = request->arg(KEY_EFFECT.c_str());
+    // Disable all effects first
     mqtt->setRainbowEnabled(false);
+    mqtt->setRainbowMultiEnabled(false);
+    mqtt->setCircadianEnabled(false);
+    mqtt->setWeatherEnabled(false);
+    mqtt->setSensorEnabled(false);
+    // Enable selected effect
+    if (effect == "rainbow") mqtt->setRainbowEnabled(true);
+    else if (effect == "rainbow_multi") mqtt->setRainbowMultiEnabled(true);
+    else if (effect == "circadian") mqtt->setCircadianEnabled(true);
+    else if (effect == "weather") mqtt->setWeatherEnabled(true);
+    else if (effect == "sensor") mqtt->setSensorEnabled(true);
+    mqtt->publishLightState();
+  }
+
+  // Handle LED brightness change
+  if (request->hasArg(KEY_LED_BRIGHTNESS.c_str())) {
+    int brightness_percent = request->arg(KEY_LED_BRIGHTNESS.c_str()).toInt();
+    mqtt->setBrightness((uint8_t)(brightness_percent * 255 / 100));
+    mqtt->publishLightState();
+  }
+
+  // Handle adaptive brightness change
+  if (request->hasArg(KEY_ADAPTIVE_BRIGHTNESS.c_str())) {
+    mqtt->setAdaptiveBrightnessEnabled(request->arg(KEY_ADAPTIVE_BRIGHTNESS.c_str()).toInt() > 0);
+    mqtt->publishAdaptiveBrightnessState();
+  }
+
+  // Handle weather preview - sets weather effect and state locally (no MQTT publish)
+  if (request->hasArg(KEY_WEATHER_DEBUG.c_str())) {
+    String weather_state = request->arg(KEY_WEATHER_DEBUG.c_str());
+    if (weather_state.length() > 0) {
+      // Disable adaptive brightness and set to full brightness (locally only)
+      mqtt->setAdaptiveBrightnessEnabled(false);
+      mqtt->setBrightness(255);
+      // Enable weather effect (locally only)
+      mqtt->setRainbowEnabled(false);
+      mqtt->setRainbowMultiEnabled(false);
+      mqtt->setCircadianEnabled(false);
+      mqtt->setSensorEnabled(false);
+      mqtt->setWeatherEnabled(true);
+      // Set weather state directly (no MQTT publish)
+      mqtt->setWeatherState(weather_state);
+
+      // Calculate and set motor position for preview
+      float target_position = MOTOR_POSITION_OPEN; // Default: open (sunny)
+      if (weather_state == "rainy" || weather_state == "pouring" ||
+          weather_state == "lightning" || weather_state == "lightning-rainy" ||
+          weather_state == "hail" || weather_state == "snowy" || weather_state == "snowy-rainy") {
+        target_position = MOTOR_POSITION_CLOSED;
+      } else if (weather_state == "partlycloudy") {
+        target_position = 0.75f;
+      } else if (weather_state == "cloudy" || weather_state == "fog" ||
+                 weather_state == "windy" || weather_state == "windy-variant") {
+        target_position = 0.5f;
+      }
+      // Force motor to move to target position
+      configuration.motor_position = target_position;
+      // No publishLightState() - this is just a local preview
+    }
+  }
+
+  // If color was changed via web, publish to MQTT
+  if (request->hasArg(KEY_COLOR.c_str())) {
+    // If no effect specified, disable all effects (static color mode)
+    if (!request->hasArg(KEY_EFFECT.c_str())) {
+      mqtt->setRainbowEnabled(false);
+      mqtt->setRainbowMultiEnabled(false);
+      mqtt->setCircadianEnabled(false);
+      mqtt->setWeatherEnabled(false);
+      mqtt->setSensorEnabled(false);
+    }
     mqtt->publishLightState();
   }
 
