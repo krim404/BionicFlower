@@ -3,6 +3,7 @@
 
 #include "HardwareService.h"
 #include "MQTTService.h"
+#include <time.h>
 
 // MARK: Constants
 
@@ -342,110 +343,130 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     String weather_state = mqtt->getWeatherState();
 
     // Individual weather animations
+    // Luminance: white/gray ~2x, yellow/cyan ~1.5x, blue needs ~3x boost
     if (weather_state == "sunny") {
       // Warm yellow/gold with gentle breathing
+      // Yellow (R+G) is ~1.5x brighter than single colors
       uint8_t breath = sin8(loop_counter) / 4 + 180;
-      uint8_t r = (255 * mqtt_brightness * breath) / (255 * 255);
-      uint8_t g = (220 * mqtt_brightness * breath) / (255 * 255);
-      uint8_t b = (100 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t r = (140 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t g = (120 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t b = (40 * mqtt_brightness * breath) / (255 * 255);
       writeLED({ r, g, b });
 
     } else if (weather_state == "clear-night") {
       // Dark blue base with twinkling stars
+      // Blue needs ~3x intensity, white ~0.5x (R+G+B combined is very bright)
       for (int i = 0; i < LED_COUNT; i++) {
-        uint8_t twinkle = ((loop_counter + i * 50) % 100 < 10) ? 255 : 0;
-        if (random(100) < 3) twinkle = 255; // Random sparkle
-        uint8_t r = (twinkle * mqtt_brightness) / 255;
-        uint8_t g = (twinkle * mqtt_brightness) / 255;
-        uint8_t b = ((40 + twinkle / 3) * mqtt_brightness) / 255;
-        leds[i] = CRGB(r, g, b);
+        bool is_star = ((loop_counter + i * 50) % 120 < 8) || (random(100) < 2);
+        if (is_star) {
+          // Twinkling star: warm white, heavily reduced (white is 2x brighter)
+          uint8_t val = (80 * mqtt_brightness) / 255;
+          leds[i] = CRGB(val, (uint8_t)((val * 95) / 100), (uint8_t)((val * 80) / 100));
+        } else {
+          // Deep blue night sky: boosted for perceived brightness
+          uint8_t b = (200 * mqtt_brightness) / 255;  // Blue boosted
+          uint8_t r = (15 * mqtt_brightness) / 255;
+          uint8_t g = (30 * mqtt_brightness) / 255;
+          leds[i] = CRGB(r, g, b);
+        }
       }
       FastLED.show();
 
     } else if (weather_state == "cloudy") {
       // Gray colors slowly drifting across LEDs
+      // Gray/white is ~2x brighter, reduce by half
       uint8_t wave_pos = (loop_counter / 3) % (LED_COUNT * 2);
       for (int i = 0; i < LED_COUNT; i++) {
         uint8_t dist = abs((int)wave_pos - i - LED_COUNT);
         uint8_t brightness_mod = 255 - (dist * 30);
         if (brightness_mod > 255) brightness_mod = 100;
-        uint8_t gray = (brightness_mod * mqtt_brightness) / 255;
-        leds[i] = CRGB(gray, gray, (gray * 110) / 100);
+        uint8_t gray = (brightness_mod * mqtt_brightness) / (255 * 2);  // Halved for white
+        // Slight blue tint for cloudy sky
+        leds[i] = CRGB((uint8_t)((gray * 85) / 100), gray, (uint8_t)((gray * 120) / 100));
       }
       FastLED.show();
 
     } else if (weather_state == "partlycloudy") {
       // Alternating sunny yellow and cloud gray
+      // Yellow (R+G) is ~1.5x brighter, gray ~2x
       for (int i = 0; i < LED_COUNT; i++) {
         if (i % 2 == 0) {
-          // Sunny
-          uint8_t r = (255 * mqtt_brightness) / 255;
-          uint8_t g = (200 * mqtt_brightness) / 255;
-          uint8_t b = (80 * mqtt_brightness) / 255;
+          // Sunny yellow - reduced for R+G brightness
+          uint8_t r = (130 * mqtt_brightness) / 255;
+          uint8_t g = (110 * mqtt_brightness) / 255;
+          uint8_t b = (35 * mqtt_brightness) / 255;
           leds[i] = CRGB(r, g, b);
         } else {
-          // Cloudy gray
-          uint8_t gray = (150 * mqtt_brightness) / 255;
-          leds[i] = CRGB(gray, gray, gray);
+          // Cloudy gray - halved for white brightness
+          uint8_t gray = (70 * mqtt_brightness) / 255;
+          leds[i] = CRGB((uint8_t)((gray * 85) / 100), gray, (uint8_t)((gray * 115) / 100));
         }
       }
       FastLED.show();
 
     } else if (weather_state == "fog") {
       // Pale white/gray with very slow breathing
+      // White is ~2x brighter, halve it
       uint8_t breath = sin8(loop_counter / 4) / 3 + 150;
-      uint8_t val = (breath * mqtt_brightness) / 255;
-      writeLED({ val, val, (val * 95) / 100 });
+      uint8_t val = (breath * mqtt_brightness) / (255 * 2);
+      writeLED({ val, val, (uint8_t)((val * 95) / 100) });
 
     } else if (weather_state == "rainy") {
       // Blue raindrops falling down (sequential LED lighting)
+      // Blue boosted for perceived brightness
       uint8_t drop_pos = (loop_counter / 4) % LED_COUNT;
       for (int i = 0; i < LED_COUNT; i++) {
-        uint8_t intensity = (i == drop_pos) ? 255 : 50;
-        uint8_t r = (30 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t g = (80 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t intensity = (i == drop_pos) ? 255 : 60;
+        uint8_t r = (40 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (100 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (255 * mqtt_brightness * intensity) / (255 * 255);  // Blue boosted
         leds[i] = CRGB(r, g, b);
       }
       FastLED.show();
 
     } else if (weather_state == "pouring") {
       // Intense blue, fast raindrops
+      // Blue boosted for perceived brightness
       uint8_t drop_pos = (loop_counter / 2) % LED_COUNT;
       uint8_t drop_pos2 = (loop_counter / 2 + 2) % LED_COUNT;
       for (int i = 0; i < LED_COUNT; i++) {
-        uint8_t intensity = (i == drop_pos || i == drop_pos2) ? 255 : 80;
-        uint8_t r = (20 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t g = (60 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t b = (255 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t intensity = (i == drop_pos || i == drop_pos2) ? 255 : 100;
+        uint8_t r = (30 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (80 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (255 * mqtt_brightness * intensity) / (255 * 255);  // Blue boosted
         leds[i] = CRGB(r, g, b);
       }
       FastLED.show();
 
     } else if (weather_state == "lightning") {
       // Dark gray base with random white flashes
+      // Flash intentionally very bright, base gray reduced
       bool flash = (random(100) < 5);
       if (flash) {
-        uint8_t val = (255 * mqtt_brightness) / 255;
+        // Lightning flash - full brightness intentionally!
+        uint8_t val = mqtt_brightness;
         writeLED({ val, val, val });
       } else {
-        uint8_t gray = (40 * mqtt_brightness) / 255;
-        writeLED({ gray, gray, (gray * 120) / 100 });
+        // Dark base - gray halved
+        uint8_t gray = (25 * mqtt_brightness) / 255;
+        writeLED({ gray, gray, (uint8_t)((gray * 130) / 100) });
       }
 
     } else if (weather_state == "lightning-rainy") {
       // Rain animation with occasional lightning flashes
+      // Flash intentionally very bright, blue boosted
       bool flash = (random(100) < 3);
       if (flash) {
-        uint8_t val = (255 * mqtt_brightness) / 255;
+        // Lightning flash - full brightness intentionally!
+        uint8_t val = mqtt_brightness;
         writeLED({ val, val, val });
       } else {
         uint8_t drop_pos = (loop_counter / 3) % LED_COUNT;
         for (int i = 0; i < LED_COUNT; i++) {
-          uint8_t intensity = (i == drop_pos) ? 255 : 60;
-          uint8_t r = (25 * mqtt_brightness * intensity) / (255 * 255);
-          uint8_t g = (70 * mqtt_brightness * intensity) / (255 * 255);
-          uint8_t b = (220 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t intensity = (i == drop_pos) ? 255 : 80;
+          uint8_t r = (35 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t g = (90 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t b = (255 * mqtt_brightness * intensity) / (255 * 255);  // Blue boosted
           leds[i] = CRGB(r, g, b);
         }
         FastLED.show();
@@ -453,22 +474,24 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     } else if (weather_state == "windy" || weather_state == "windy-variant") {
       // Cyan/turquoise quickly sweeping back and forth
+      // Cyan (G+B) is ~1.5x brighter, reduce G, boost B
       uint8_t pos = (sin8(loop_counter * 2) * (LED_COUNT - 1)) / 255;
       for (int i = 0; i < LED_COUNT; i++) {
         uint8_t dist = abs((int)pos - i);
         uint8_t intensity = 255 - (dist * 60);
         if (intensity > 255) intensity = 50;
-        uint8_t r = (50 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t g = (200 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t b = (180 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t r = (25 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (120 * mqtt_brightness * intensity) / (255 * 255);  // Reduced for cyan
+        uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);  // Blue boosted
         leds[i] = CRGB(r, g, b);
       }
       FastLED.show();
 
     } else if (weather_state == "snowy") {
       // White with random sparkles
+      // White is ~2x brighter, halve values
       for (int i = 0; i < LED_COUNT; i++) {
-        uint8_t sparkle = (random(100) < 10) ? 255 : 180;
+        uint8_t sparkle = (random(100) < 10) ? 110 : 80;
         uint8_t val = (sparkle * mqtt_brightness) / 255;
         leds[i] = CRGB(val, val, val);
       }
@@ -476,17 +499,20 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     } else if (weather_state == "snowy-rainy") {
       // Alternating white and blue drops
+      // White ~2x brighter (halved), blue boosted
       uint8_t drop_pos = (loop_counter / 3) % LED_COUNT;
       for (int i = 0; i < LED_COUNT; i++) {
         bool is_snow = ((loop_counter / 10) + i) % 2 == 0;
-        uint8_t intensity = (i == drop_pos) ? 255 : 80;
+        uint8_t intensity = (i == drop_pos) ? 255 : 100;
         if (is_snow) {
-          uint8_t val = (intensity * mqtt_brightness) / 255;
+          // White snow: halved for brightness match
+          uint8_t val = (intensity * mqtt_brightness) / (255 * 2);
           leds[i] = CRGB(val, val, val);
         } else {
+          // Blue rain: boosted
           uint8_t r = (30 * mqtt_brightness * intensity) / (255 * 255);
-          uint8_t g = (80 * mqtt_brightness * intensity) / (255 * 255);
-          uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t g = (70 * mqtt_brightness * intensity) / (255 * 255);
+          uint8_t b = (220 * mqtt_brightness * intensity) / (255 * 255);
           leds[i] = CRGB(r, g, b);
         }
       }
@@ -494,8 +520,9 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     } else if (weather_state == "hail") {
       // White with harsh random flicker
+      // White is ~2x brighter, halve values
       for (int i = 0; i < LED_COUNT; i++) {
-        uint8_t flicker = (random(100) < 30) ? 255 : (random(100) < 50 ? 150 : 50);
+        uint8_t flicker = (random(100) < 30) ? 100 : (random(100) < 50 ? 60 : 20);
         uint8_t val = (flicker * mqtt_brightness) / 255;
         leds[i] = CRGB(val, val, val);
       }
@@ -503,11 +530,13 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     } else if (weather_state == "exceptional") {
       // Rainbow multi effect for exceptional weather
+      // HSV handles brightness internally, reduce for balance
       uint8_t base_hue = rgb_hue >> 8;
       rgb_hue += 20;
+      uint8_t balanced_brightness = (mqtt_brightness * 180) / 255;
       for (int i = 0; i < LED_COUNT; i++) {
         uint8_t hue = base_hue + (i * 255 / LED_COUNT);
-        CHSV hsv(hue, 255, mqtt_brightness);
+        CHSV hsv(hue, 255, balanced_brightness);
         CRGB rgb;
         hsv2rgb_rainbow(hsv, rgb);
         leds[i] = rgb;
@@ -516,32 +545,38 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
 
     } else {
       // Default/unknown: warm white
-      uint8_t val = (200 * mqtt_brightness) / 255;
-      writeLED({ val, (val * 95) / 100, (val * 85) / 100 });
+      // Warm white (R+G+small B) is ~1.8x brighter, reduce
+      uint8_t val = (80 * mqtt_brightness) / 255;
+      writeLED({ val, (uint8_t)((val * 85) / 100), (uint8_t)((val * 60) / 100) });
     }
   } else if (circadian_enabled) {
-    // Circadian mode: Color temperature based on time of day
-    uint8_t hour = mqtt->getCircadianHour();
+    // Circadian mode: Color temperature based on time of day (via NTP)
+    // White/yellow ~2x brighter (halved), orange ~1.5x, red needs boost
+    struct tm timeinfo;
+    uint8_t hour = 12; // Default fallback
+    if (getLocalTime(&timeinfo)) {
+      hour = timeinfo.tm_hour;
+    }
     uint8_t r, g, b;
 
     if (hour >= 6 && hour < 9) {
-      // Morning: warm orange/yellow sunrise
-      r = 255; g = 180; b = 80;
+      // Morning: warm orange/yellow sunrise - yellow ~1.5x brighter
+      r = 130; g = 100; b = 40;
     } else if (hour >= 9 && hour < 12) {
-      // Late morning: bright warm white
-      r = 255; g = 240; b = 200;
+      // Late morning: bright warm white - white ~2x brighter
+      r = 100; g = 95; b = 80;
     } else if (hour >= 12 && hour < 17) {
-      // Midday: cool daylight white
-      r = 240; g = 250; b = 255;
+      // Midday: cool daylight white - white ~2x brighter, blue boosted
+      r = 85; g = 90; b = 120;
     } else if (hour >= 17 && hour < 20) {
-      // Evening: warm golden
-      r = 255; g = 200; b = 100;
+      // Evening: warm golden - yellow ~1.5x brighter
+      r = 130; g = 105; b = 45;
     } else if (hour >= 20 && hour < 22) {
-      // Late evening: warm amber
-      r = 255; g = 150; b = 50;
+      // Late evening: warm amber/orange - ~1.3x brighter
+      r = 160; g = 80; b = 30;
     } else {
-      // Night: dim warm red (sleep friendly)
-      r = 180; g = 80; b = 30;
+      // Night: dim warm red (sleep friendly) - red single color, boost for visibility
+      r = 180; g = 40; b = 20;
     }
 
     // Scale by brightness
@@ -552,12 +587,13 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     writeLED({ r, g, b });
   } else if (rainbow_multi_enabled) {
     // Rainbow Multi: Each LED has a different color, rotating together
+    // HSV brightness reduced for balance with other effects
     rgb_hue += 20;
     uint8_t base_hue = rgb_hue >> 8;
 
-    // Scale brightness by MQTT brightness setting
-    uint8_t base_brightness = (mqtt_brightness * 180) / 255;
-    uint8_t pulse_range = (mqtt_brightness * 75) / 255;
+    // Scale brightness by MQTT brightness setting - reduced for balance
+    uint8_t base_brightness = (mqtt_brightness * 150) / 255;
+    uint8_t pulse_range = (mqtt_brightness * 50) / 255;
     uint8_t led_brightness = base_brightness + ((sin8(loop_counter) * pulse_range) / 255);
 
     // Each LED gets a different hue offset (evenly distributed across spectrum)
@@ -571,13 +607,13 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     FastLED.show();
   } else if (rainbow_enabled) {
     // Rainbow: All LEDs same color, rotating through spectrum
+    // HSV brightness reduced for balance with other effects
     rgb_hue += 20;
     uint8_t hue8 = rgb_hue >> 8;
 
-    // Scale base brightness by MQTT brightness setting (0-255)
-    // Gentle sine wave pulsing around the set brightness
-    uint8_t base_brightness = (mqtt_brightness * 180) / 255;
-    uint8_t pulse_range = (mqtt_brightness * 75) / 255;
+    // Scale base brightness by MQTT brightness setting - reduced for balance
+    uint8_t base_brightness = (mqtt_brightness * 150) / 255;
+    uint8_t pulse_range = (mqtt_brightness * 50) / 255;
     uint8_t led_brightness = base_brightness + ((sin8(loop_counter) * pulse_range) / 255);
 
     CHSV hsv(hue8, 255, led_brightness);

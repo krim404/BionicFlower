@@ -3,10 +3,12 @@
 
 #include "WiFiService.h"
 #include "Credentials.h"
+#include <time.h>
 
 // MARK: Constants
 
 const String PRINT_PREFIX = "[WiFi]: ";
+const char* NTP_SERVER = "pool.ntp.org";
 
 // MARK: Initialization
 
@@ -68,6 +70,9 @@ void WiFiService::onEvent(WiFiEvent_t event) {
       break;
     case SYSTEM_EVENT_STA_GOT_IP:
       Serial.println(PRINT_PREFIX + "Connected! IP: " + WiFi.localIP().toString());
+      // Initialize NTP with automatic DST handling
+      configTzTime(NTP_TIMEZONE, NTP_SERVER);
+      Serial.println(PRINT_PREFIX + "NTP configured (pool.ntp.org)");
       startCompleted(true);
       break;
     case SYSTEM_EVENT_STA_LOST_IP:
