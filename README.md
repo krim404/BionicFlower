@@ -44,16 +44,18 @@ Updates every 15 seconds. Can be toggled via `switch.bionic_flower_adaptive_brig
 
 ### Circadian Mode
 
-Automatically adjusts color temperature to the time of day using NTP:
+Automatically adjusts color temperature and motor position to the time of day using NTP:
 
-| Time | Color Mood |
-|------|------------|
-| 06:00 - 09:00 | Warm orange (sunrise) |
-| 09:00 - 12:00 | Warm white |
-| 12:00 - 17:00 | Cool daylight |
-| 17:00 - 20:00 | Golden hour |
-| 20:00 - 22:00 | Warm amber |
-| 22:00 - 06:00 | Dimmed red (night) |
+| Time | Color Mood | Motor |
+|------|------------|-------|
+| 06:00 - 08:00 | Orange-pink sunrise with pulse | Gradual opening |
+| 08:00 - 11:00 | Warm golden | Gradual opening (fully open at 10:00) |
+| 10:00 - 19:00 | Bright gold-white (midday sun) | Fully open |
+| 16:00 - 19:00 | Golden orange | Fully open |
+| 19:00 - 22:00 | Deep red-orange sunset | Gradual closing |
+| 22:00 - 06:00 | Starry night (dark blue with twinkling stars) | Closed |
+
+Motor opens gradually from 07:00-10:00 and closes gradually from 19:00-22:00 in 10-minute steps.
 
 Time is automatically synchronized via NTP (with automatic DST handling). Configure your timezone in `Credentials.h`.
 
@@ -63,12 +65,12 @@ Visualizes Home Assistant weather data with unique LED animations and motor posi
 
 | Weather | LEDs | Motor |
 |---------|------|-------|
-| `sunny` | Warm yellow, pulsing | 100% open |
+| `sunny` | Golden yellow with breathing effect | 100% open |
 | `clear-night` | Dark blue with twinkling stars | 100% open |
-| `partlycloudy` | Yellow/gray alternating | 75% open |
+| `partlycloudy` | Golden sun / gray cloud alternating | 75% open |
 | `cloudy` | Gray clouds drifting | 50% open |
 | `fog` | Pale white, slow breathing | 50% open |
-| `windy` | Cyan, fast back-and-forth | 50% open |
+| `windy` | Green-yellow leaves blowing | 50% open |
 | `rainy` | Blue raindrops falling | Closed |
 | `pouring` | Fast, intense raindrops | Closed |
 | `lightning` | Gray with white flashes | Closed |
@@ -100,13 +102,10 @@ automation:
 
 The touch sensors can be used for local control:
 
-| Action | Function |
-|--------|----------|
-| **Left short** | Previous effect |
-| **Left long** (>500ms) | Decrease brightness |
-| **Right short** | Next effect |
-| **Right long** (>500ms) | Increase brightness |
-| **Both simultaneously** | Toggle LEDs on/off |
+| Touch | Function |
+|-------|----------|
+| **Left** | Toggle LEDs on/off |
+| **Right** | Cycle through effects |
 
 Effect order: None → Rainbow → Rainbow Multi → Circadian → Weather → Sensor → None ...
 

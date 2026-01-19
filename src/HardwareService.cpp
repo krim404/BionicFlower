@@ -225,127 +225,52 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
   bool sensor_enabled = mqtt->isSensorEnabled();
 
   // Touch handling (always active)
+  // Left touch: Toggle light on/off
+  // Right touch: Cycle through effects
   if (sensor_data.has_touch_sensor) {
-    const unsigned long LONG_PRESS_DURATION = 500; // 500ms for long press
-    const uint8_t BRIGHTNESS_STEP = 25;
-    unsigned long now = millis();
-
-    // Both touches: toggle light on/off
-    if (sensor_data.touch_left && sensor_data.touch_right) {
-      if (!touch_left_was_pressed && !touch_right_was_pressed) {
-        // First frame of both pressed - toggle light
-        mqtt->setLightOn(!light_on);
-        mqtt->publishLightState();
-        light_on = mqtt->isLightOn();
-      }
+    // Left touch: toggle light on/off
+    if (sensor_data.touch_left && !touch_left_was_pressed) {
       touch_left_was_pressed = true;
-      touch_right_was_pressed = true;
-      touch_left_long_triggered = true;  // Prevent single-touch actions
-      touch_right_long_triggered = true;
-    }
-    // Left touch handling (only if right not pressed)
-    else if (sensor_data.touch_left && !sensor_data.touch_right) {
-      if (!touch_left_was_pressed) {
-        touch_left_start = now;
-        touch_left_was_pressed = true;
-        touch_left_long_triggered = false;
-      } else if (!touch_left_long_triggered && (now - touch_left_start >= LONG_PRESS_DURATION)) {
-        // Long press: decrease brightness
-        // Use raw_mqtt_brightness (not scaled by adaptive brightness) for adjustment
-        touch_left_long_triggered = true;
-        if (raw_mqtt_brightness > BRIGHTNESS_STEP) {
-          mqtt->setBrightness(raw_mqtt_brightness - BRIGHTNESS_STEP);
-        } else {
-          mqtt->setBrightness(1); // Minimum brightness
-        }
-        mqtt->publishLightState();
-      }
-    }
-    // Right touch handling (only if left not pressed)
-    else if (sensor_data.touch_right && !sensor_data.touch_left) {
-      if (!touch_right_was_pressed) {
-        touch_right_start = now;
-        touch_right_was_pressed = true;
-        touch_right_long_triggered = false;
-      } else if (!touch_right_long_triggered && (now - touch_right_start >= LONG_PRESS_DURATION)) {
-        // Long press: increase brightness
-        // Use raw_mqtt_brightness (not scaled by adaptive brightness) for adjustment
-        touch_right_long_triggered = true;
-        if (raw_mqtt_brightness < 255 - BRIGHTNESS_STEP) {
-          mqtt->setBrightness(raw_mqtt_brightness + BRIGHTNESS_STEP);
-        } else {
-          mqtt->setBrightness(255); // Maximum brightness
-        }
-        mqtt->publishLightState();
-      }
-    }
-    // No touch - handle releases
-    else {
-      // Left touch released
-      if (touch_left_was_pressed && !touch_left_long_triggered) {
-        // Short press released: previous effect
-        // Order: None -> Sensor -> Weather -> Circadian -> Rainbow Multi -> Rainbow -> None
-        if (sensor_enabled) {
-          mqtt->setSensorEnabled(false);
-          // None - static color
-        } else if (weather_enabled) {
-          mqtt->setWeatherEnabled(false);
-          mqtt->setSensorEnabled(true);
-        } else if (circadian_enabled) {
-          mqtt->setCircadianEnabled(false);
-          mqtt->setWeatherEnabled(true);
-        } else if (rainbow_multi_enabled) {
-          mqtt->setRainbowMultiEnabled(false);
-          mqtt->setCircadianEnabled(true);
-        } else if (rainbow_enabled) {
-          mqtt->setRainbowEnabled(false);
-          mqtt->setRainbowMultiEnabled(true);
-        } else {
-          // None -> Sensor (cycle backwards)
-          mqtt->setSensorEnabled(true);
-        }
-        mqtt->publishLightState();
-      }
+      mqtt->setLightOn(!light_on);
+      mqtt->publishLightState();
+      light_on = mqtt->isLightOn();
+    } else if (!sensor_data.touch_left) {
       touch_left_was_pressed = false;
-      touch_left_long_triggered = false;
-
-      // Right touch released
-      if (touch_right_was_pressed && !touch_right_long_triggered) {
-        // Short press released: next effect
-        // Order: None -> Rainbow -> Rainbow Multi -> Circadian -> Weather -> Sensor -> None
-        if (rainbow_enabled) {
-          mqtt->setRainbowEnabled(false);
-          mqtt->setRainbowMultiEnabled(true);
-        } else if (rainbow_multi_enabled) {
-          mqtt->setRainbowMultiEnabled(false);
-          mqtt->setCircadianEnabled(true);
-        } else if (circadian_enabled) {
-          mqtt->setCircadianEnabled(false);
-          mqtt->setWeatherEnabled(true);
-        } else if (weather_enabled) {
-          mqtt->setWeatherEnabled(false);
-          mqtt->setSensorEnabled(true);
-        } else if (sensor_enabled) {
-          mqtt->setSensorEnabled(false);
-          // None - static color
-        } else {
-          // None -> Rainbow (cycle forwards)
-          mqtt->setRainbowEnabled(true);
-        }
-        mqtt->publishLightState();
-      }
-      touch_right_was_pressed = false;
-      touch_right_long_triggered = false;
     }
 
-    // Re-read effect states after potential changes
-    rainbow_enabled = mqtt->isRainbowEnabled();
-    rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
-    circadian_enabled = mqtt->isCircadianEnabled();
-    weather_enabled = mqtt->isWeatherEnabled();
-    sensor_enabled = mqtt->isSensorEnabled();
-    raw_mqtt_brightness = mqtt->getBrightness();
-    mqtt_brightness = (raw_mqtt_brightness * adaptive_brightness_factor) / 255;
+    // Right touch: cycle effects (None -> Rainbow -> Rainbow Multi -> Circadian -> Weather -> Sensor -> None)
+    if (sensor_data.touch_right && !touch_right_was_pressed) {
+      touch_right_was_pressed = true;
+      if (rainbow_enabled) {
+        mqtt->setRainbowEnabled(false);
+        mqtt->setRainbowMultiEnabled(true);
+      } else if (rainbow_multi_enabled) {
+        mqtt->setRainbowMultiEnabled(false);
+        mqtt->setCircadianEnabled(true);
+      } else if (circadian_enabled) {
+        mqtt->setCircadianEnabled(false);
+        mqtt->setWeatherEnabled(true);
+      } else if (weather_enabled) {
+        mqtt->setWeatherEnabled(false);
+        mqtt->setSensorEnabled(true);
+      } else if (sensor_enabled) {
+        mqtt->setSensorEnabled(false);
+        // None - static color
+      } else {
+        // None -> Rainbow
+        mqtt->setRainbowEnabled(true);
+      }
+      mqtt->publishLightState();
+
+      // Re-read effect states
+      rainbow_enabled = mqtt->isRainbowEnabled();
+      rainbow_multi_enabled = mqtt->isRainbowMultiEnabled();
+      circadian_enabled = mqtt->isCircadianEnabled();
+      weather_enabled = mqtt->isWeatherEnabled();
+      sensor_enabled = mqtt->isSensorEnabled();
+    } else if (!sensor_data.touch_right) {
+      touch_right_was_pressed = false;
+    }
   }
 
   // Weather motor control - runs independently of LED state
@@ -362,6 +287,57 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     } else if (weather_state == "cloudy" || weather_state == "fog" ||
                weather_state == "windy" || weather_state == "windy-variant") {
       target_position = 0.5f;
+    }
+
+    // Move motor to target position if different
+    if (abs(configuration.motor_position - target_position) > 0.01f) {
+      move(target_position, MOTOR_SPEED_FAST);
+      configuration.motor_position = target_position;
+    }
+  }
+
+  // Circadian motor control - gradual open/close based on time of day
+  if (circadian_enabled) {
+    int preview_hour = mqtt->getCircadianPreviewHour();
+    float target_position = MOTOR_POSITION_OPEN;
+
+    if (preview_hour >= 0) {
+      // Preview mode: use preview hour for motor position
+      int hour = preview_hour;
+      if (hour >= 22 || hour < 7) {
+        target_position = MOTOR_POSITION_CLOSED;
+      } else if (hour >= 7 && hour < 10) {
+        // Gradual opening: 7:00=0%, 10:00=100%
+        target_position = (float)(hour - 7) / 3.0f;
+      } else if (hour >= 10 && hour < 19) {
+        target_position = MOTOR_POSITION_OPEN;
+      } else {
+        // Gradual closing: 19:00=100%, 22:00=0%
+        target_position = 1.0f - ((float)(hour - 19) / 3.0f);
+      }
+    } else {
+      // Real time mode: use actual time with minute precision for 10-min steps
+      struct tm timeinfo;
+      if (getLocalTime(&timeinfo)) {
+        int hour = timeinfo.tm_hour;
+        int minute = timeinfo.tm_min;
+
+        if (hour >= 22 || hour < 7) {
+          target_position = MOTOR_POSITION_CLOSED;
+        } else if (hour >= 7 && hour < 10) {
+          // Gradual opening 07:00-10:00 in 10-min steps (18 steps total)
+          int minutes_since_7 = (hour - 7) * 60 + minute;
+          int step = minutes_since_7 / 10;  // 0-17
+          target_position = (float)step / 18.0f;
+        } else if (hour >= 10 && hour < 19) {
+          target_position = MOTOR_POSITION_OPEN;
+        } else {
+          // Gradual closing 19:00-22:00 in 10-min steps (18 steps total)
+          int minutes_since_19 = (hour - 19) * 60 + minute;
+          int step = minutes_since_19 / 10;  // 0-17
+          target_position = 1.0f - ((float)step / 18.0f);
+        }
+      }
     }
 
     // Move motor to target position if different
@@ -392,12 +368,16 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     // Individual weather animations
     // Luminance: white/gray ~2x, yellow/cyan ~1.5x, blue needs ~3x boost
     if (weather_state == "sunny") {
-      // Warm yellow/gold with gentle breathing
-      // Yellow (R+G) is ~1.5x brighter than single colors
-      uint8_t breath = sin8(loop_counter) / 4 + 180;
-      uint8_t r = (140 * mqtt_brightness * breath) / (255 * 255);
-      uint8_t g = (120 * mqtt_brightness * breath) / (255 * 255);
-      uint8_t b = (40 * mqtt_brightness * breath) / (255 * 255);
+      // Rich golden yellow with visible breathing effect
+      // Use millis() for time-based animation (loop_counter is too slow at 10Hz)
+      // ~4 second cycle = comfortable, visible breathing
+      uint8_t phase = (uint8_t)((millis() / 15) % 256);  // ~4 second cycle
+      uint8_t sine = sin8(phase);  // 0-255
+      // Breathing: 50%-100% range for visible but not too strong effect
+      uint8_t breath = (sine * 5 / 10) + 128;  // 128-255 (50%-100%)
+      uint8_t r = (uint8_t)((255UL * mqtt_brightness * breath) / (255UL * 255));
+      uint8_t g = (uint8_t)((180UL * mqtt_brightness * breath) / (255UL * 255));  // Golden orange
+      uint8_t b = (uint8_t)((30UL * mqtt_brightness * breath) / (255UL * 255));   // Saturated
       writeLED({ r, g, b });
 
     } else if (weather_state == "clear-night") {
@@ -434,14 +414,13 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       FastLED.show();
 
     } else if (weather_state == "partlycloudy") {
-      // Alternating sunny yellow and cloud gray
-      // Yellow (R+G) is ~1.5x brighter, gray ~2x
+      // Alternating golden sun and cloud gray
       for (int i = 0; i < LED_COUNT; i++) {
         if (i % 2 == 0) {
-          // Sunny yellow - reduced for R+G brightness
-          uint8_t r = (130 * mqtt_brightness) / 255;
-          uint8_t g = (110 * mqtt_brightness) / 255;
-          uint8_t b = (35 * mqtt_brightness) / 255;
+          // Golden sun - saturated warm color
+          uint8_t r = (255 * mqtt_brightness) / 255;  // Full red
+          uint8_t g = (160 * mqtt_brightness) / 255;  // Orange-gold
+          uint8_t b = (0 * mqtt_brightness) / 255;    // No blue
           leds[i] = CRGB(r, g, b);
         } else {
           // Cloudy gray - halved for white brightness
@@ -520,16 +499,26 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       }
 
     } else if (weather_state == "windy" || weather_state == "windy-variant") {
-      // Cyan/turquoise quickly sweeping back and forth
-      // Cyan (G+B) is ~1.5x brighter, reduce G, boost B
-      uint8_t pos = (sin8(loop_counter * 2) * (LED_COUNT - 1)) / 255;
+      // Green-yellow leaves blowing in the wind - sweeping pattern
+      uint8_t pos = (sin8(loop_counter * 3) * (LED_COUNT - 1)) / 255;
       for (int i = 0; i < LED_COUNT; i++) {
         uint8_t dist = abs((int)pos - i);
-        uint8_t intensity = 255 - (dist * 60);
-        if (intensity > 255) intensity = 50;
-        uint8_t r = (25 * mqtt_brightness * intensity) / (255 * 255);
-        uint8_t g = (120 * mqtt_brightness * intensity) / (255 * 255);  // Reduced for cyan
-        uint8_t b = (200 * mqtt_brightness * intensity) / (255 * 255);  // Blue boosted
+        uint8_t intensity = 255 - (dist * 50);
+        if (intensity > 255) intensity = 60;
+        // Alternate between green and yellow-green for leaf effect
+        bool is_yellow = ((loop_counter / 8) + i) % 3 == 0;
+        uint8_t r, g, b;
+        if (is_yellow) {
+          // Yellow-green leaf
+          r = (180 * mqtt_brightness * intensity) / (255 * 255);
+          g = (220 * mqtt_brightness * intensity) / (255 * 255);
+          b = (30 * mqtt_brightness * intensity) / (255 * 255);
+        } else {
+          // Green leaf
+          r = (60 * mqtt_brightness * intensity) / (255 * 255);
+          g = (200 * mqtt_brightness * intensity) / (255 * 255);
+          b = (40 * mqtt_brightness * intensity) / (255 * 255);
+        }
         leds[i] = CRGB(r, g, b);
       }
       FastLED.show();
@@ -597,41 +586,86 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
       writeLED({ val, (uint8_t)((val * 85) / 100), (uint8_t)((val * 60) / 100) });
     }
   } else if (circadian_enabled) {
-    // Circadian mode: Color temperature based on time of day (via NTP)
-    // White/yellow ~2x brighter (halved), orange ~1.5x, red needs boost
-    struct tm timeinfo;
-    uint8_t hour = 12; // Default fallback
-    if (getLocalTime(&timeinfo)) {
-      hour = timeinfo.tm_hour;
-    }
-    uint8_t r, g, b;
-
-    if (hour >= 6 && hour < 9) {
-      // Morning: warm orange/yellow sunrise - yellow ~1.5x brighter
-      r = 130; g = 100; b = 40;
-    } else if (hour >= 9 && hour < 12) {
-      // Late morning: bright warm white - white ~2x brighter
-      r = 100; g = 95; b = 80;
-    } else if (hour >= 12 && hour < 17) {
-      // Midday: cool daylight white - white ~2x brighter, blue boosted
-      r = 85; g = 90; b = 120;
-    } else if (hour >= 17 && hour < 20) {
-      // Evening: warm golden - yellow ~1.5x brighter
-      r = 130; g = 105; b = 45;
-    } else if (hour >= 20 && hour < 22) {
-      // Late evening: warm amber/orange - ~1.3x brighter
-      r = 160; g = 80; b = 30;
+    // Circadian mode: Colors based on time of day (via NTP)
+    // Use preview hour if set, otherwise use real time
+    int preview_hour = mqtt->getCircadianPreviewHour();
+    uint8_t hour;
+    if (preview_hour >= 0) {
+      hour = (uint8_t)preview_hour;
     } else {
-      // Night: dim warm red (sleep friendly) - red single color, boost for visibility
-      r = 180; g = 40; b = 20;
+      struct tm timeinfo;
+      hour = 12; // Default fallback
+      if (getLocalTime(&timeinfo)) {
+        hour = timeinfo.tm_hour;
+      }
     }
 
-    // Scale by brightness
-    r = (r * mqtt_brightness) / 255;
-    g = (g * mqtt_brightness) / 255;
-    b = (b * mqtt_brightness) / 255;
-
-    writeLED({ r, g, b });
+    if (hour >= 22 || hour < 6) {
+      // Night (22:00 - 06:00): Starry night - same as clear-night weather
+      for (int i = 0; i < LED_COUNT; i++) {
+        bool is_star = ((loop_counter + i * 50) % 120 < 8) || (random(100) < 2);
+        if (is_star) {
+          // Twinkling star: warm white, reduced (same as clear-night)
+          uint8_t val = (80 * mqtt_brightness) / 255;
+          leds[i] = CRGB(val, (uint8_t)((val * 95) / 100), (uint8_t)((val * 80) / 100));
+        } else {
+          // Deep blue night sky: boosted for perceived brightness (same as clear-night)
+          uint8_t b = (200 * mqtt_brightness) / 255;
+          uint8_t r = (15 * mqtt_brightness) / 255;
+          uint8_t g = (30 * mqtt_brightness) / 255;
+          leds[i] = CRGB(r, g, b);
+        }
+      }
+      FastLED.show();
+    } else if (hour >= 6 && hour < 8) {
+      // Early morning sunrise: orange-pink with slow rotating glow
+      uint8_t pos = (uint8_t)((millis() / 80) % LED_COUNT);  // Slow rotation ~0.4s per LED
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t dist = (i >= pos) ? (i - pos) : (LED_COUNT - pos + i);
+        uint8_t intensity = 255 - (dist * 35);  // Subtle gradient
+        uint8_t r = (255 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (100 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (60 * mqtt_brightness * intensity) / (255 * 255);
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+    } else if (hour >= 8 && hour < 11) {
+      // Late morning: warm golden with visible breathing
+      uint8_t phase = (uint8_t)((millis() / 15) % 256);  // ~4 second cycle
+      uint8_t sine = sin8(phase);
+      uint8_t breath = (sine * 5 / 10) + 128;  // 50%-100% range
+      uint8_t r = (255 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t g = (180 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t b = (40 * mqtt_brightness * breath) / (255 * 255);
+      writeLED({ r, g, b });
+    } else if (hour >= 11 && hour < 16) {
+      // Midday: bright gold-white (full sun) - static, no animation
+      uint8_t r = (255 * mqtt_brightness) / 255;
+      uint8_t g = (220 * mqtt_brightness) / 255;
+      uint8_t b = (120 * mqtt_brightness) / 255;
+      writeLED({ r, g, b });
+    } else if (hour >= 16 && hour < 19) {
+      // Afternoon/early evening: golden orange with visible breathing
+      uint8_t phase = (uint8_t)((millis() / 15) % 256);  // ~4 second cycle
+      uint8_t sine = sin8(phase);
+      uint8_t breath = (sine * 5 / 10) + 128;  // 50%-100% range
+      uint8_t r = (255 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t g = (150 * mqtt_brightness * breath) / (255 * 255);
+      uint8_t b = (30 * mqtt_brightness * breath) / (255 * 255);
+      writeLED({ r, g, b });
+    } else {
+      // Late evening sunset (19:00 - 22:00): deep red-orange with slow rotating glow
+      uint8_t pos = (uint8_t)((millis() / 100) % LED_COUNT);  // Slower rotation ~0.5s per LED
+      for (int i = 0; i < LED_COUNT; i++) {
+        uint8_t dist = (i >= pos) ? (i - pos) : (LED_COUNT - pos + i);
+        uint8_t intensity = 255 - (dist * 35);  // Subtle gradient
+        uint8_t r = (255 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t g = (60 * mqtt_brightness * intensity) / (255 * 255);
+        uint8_t b = (20 * mqtt_brightness * intensity) / (255 * 255);
+        leds[i] = CRGB(r, g, b);
+      }
+      FastLED.show();
+    }
   } else if (rainbow_multi_enabled) {
     // Rainbow Multi: Each LED has a different color, rotating together
     // HSV brightness reduced for balance with other effects

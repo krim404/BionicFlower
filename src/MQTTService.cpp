@@ -24,6 +24,7 @@ MQTTService::MQTTService() : mqtt_client(wifi_client) {
   last_has_light_sensor = false;
   last_has_touch_sensor = false;
   circadian_hour = 12;
+  circadian_preview_hour = -1;  // -1 = use real time
   weather_state = "sunny";
   weather_temperature = 20.0f;
 }

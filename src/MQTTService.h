@@ -48,6 +48,8 @@ class MQTTService {
 
     // External data for effects
     uint8_t getCircadianHour() { return circadian_hour; }
+    int getCircadianPreviewHour() { return circadian_preview_hour; }
+    void setCircadianPreviewHour(int hour) { circadian_preview_hour = hour; }
     String getWeatherState() { return weather_state; }
     void setWeatherState(const String& state) { weather_state = state; }
     float getWeatherTemperature() { return weather_temperature; }
@@ -77,6 +79,7 @@ class MQTTService {
 
     // External data for effects
     uint8_t circadian_hour;
+    int circadian_preview_hour;  // -1 = use real time, >= 0 = use preview hour
     String weather_state;
     float weather_temperature;
 

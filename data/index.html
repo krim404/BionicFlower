@@ -251,25 +251,35 @@
                 <!-- Manual Tab -->
                 <div id="manual" class="tab-pane row fade in active">
                     <div class="manual-tab-container">
-                        <!-- Weather Preview -->
+                        <!-- Effect Preview -->
                         <div class="element weather-preview-container">
-                            <p align="center" class="label-title">Weather Preview</p>
+                            <p align="center" class="label-title">Effect Preview</p>
                             <select id="weather-debug-select" class="effect-select">
-                                <option value="">-- Select Weather --</option>
-                                <option value="sunny">Sunny</option>
-                                <option value="clear-night">Clear Night</option>
-                                <option value="partlycloudy">Partly Cloudy</option>
-                                <option value="cloudy">Cloudy</option>
-                                <option value="fog">Fog</option>
-                                <option value="windy">Windy</option>
-                                <option value="rainy">Rainy</option>
-                                <option value="pouring">Pouring</option>
-                                <option value="lightning">Lightning</option>
-                                <option value="lightning-rainy">Lightning + Rain</option>
-                                <option value="snowy">Snowy</option>
-                                <option value="snowy-rainy">Snowy + Rain</option>
-                                <option value="hail">Hail</option>
-                                <option value="exceptional">Exceptional</option>
+                                <option value="">-- Select Effect --</option>
+                                <optgroup label="Weather Effects">
+                                    <option value="sunny">Sunny</option>
+                                    <option value="clear-night">Clear Night</option>
+                                    <option value="partlycloudy">Partly Cloudy</option>
+                                    <option value="cloudy">Cloudy</option>
+                                    <option value="fog">Fog</option>
+                                    <option value="windy">Windy</option>
+                                    <option value="rainy">Rainy</option>
+                                    <option value="pouring">Pouring</option>
+                                    <option value="lightning">Lightning</option>
+                                    <option value="lightning-rainy">Lightning + Rain</option>
+                                    <option value="snowy">Snowy</option>
+                                    <option value="snowy-rainy">Snowy + Rain</option>
+                                    <option value="hail">Hail</option>
+                                    <option value="exceptional">Exceptional</option>
+                                </optgroup>
+                                <optgroup label="Circadian (Time of Day)">
+                                    <option value="circadian_night">Night (22:00-06:00)</option>
+                                    <option value="circadian_sunrise">Sunrise (06:00-08:00)</option>
+                                    <option value="circadian_morning">Morning (08:00-11:00)</option>
+                                    <option value="circadian_midday">Midday (11:00-16:00)</option>
+                                    <option value="circadian_afternoon">Afternoon (16:00-19:00)</option>
+                                    <option value="circadian_sunset">Sunset (19:00-22:00)</option>
+                                </optgroup>
                             </select>
                         </div>
                         <!-- Motor position slider-->
