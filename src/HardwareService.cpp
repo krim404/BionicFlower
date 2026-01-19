@@ -251,9 +251,10 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
         touch_left_long_triggered = false;
       } else if (!touch_left_long_triggered && (now - touch_left_start >= LONG_PRESS_DURATION)) {
         // Long press: decrease brightness
+        // Use raw_mqtt_brightness (not scaled by adaptive brightness) for adjustment
         touch_left_long_triggered = true;
-        if (mqtt_brightness > BRIGHTNESS_STEP) {
-          mqtt->setBrightness(mqtt_brightness - BRIGHTNESS_STEP);
+        if (raw_mqtt_brightness > BRIGHTNESS_STEP) {
+          mqtt->setBrightness(raw_mqtt_brightness - BRIGHTNESS_STEP);
         } else {
           mqtt->setBrightness(1); // Minimum brightness
         }
@@ -268,9 +269,10 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
         touch_right_long_triggered = false;
       } else if (!touch_right_long_triggered && (now - touch_right_start >= LONG_PRESS_DURATION)) {
         // Long press: increase brightness
+        // Use raw_mqtt_brightness (not scaled by adaptive brightness) for adjustment
         touch_right_long_triggered = true;
-        if (mqtt_brightness < 255 - BRIGHTNESS_STEP) {
-          mqtt->setBrightness(mqtt_brightness + BRIGHTNESS_STEP);
+        if (raw_mqtt_brightness < 255 - BRIGHTNESS_STEP) {
+          mqtt->setBrightness(raw_mqtt_brightness + BRIGHTNESS_STEP);
         } else {
           mqtt->setBrightness(255); // Maximum brightness
         }
@@ -664,8 +666,8 @@ void HardwareService::loop(const boolean has_active_connection, uint32_t loop_co
     CHSV hsv(hue8, 255, led_brightness);
     CRGB rgb;
     hsv2rgb_rainbow(hsv, rgb);
-    configuration.color = { rgb.r, rgb.g, rgb.b };
-    writeLED(configuration.color);
+    // Don't overwrite configuration.color - keep user's static color intact
+    writeLED({ rgb.r, rgb.g, rgb.b });
   } else {
     // Static color from configuration, scaled by MQTT brightness
     Color scaled_color;
